@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   HelpCircle, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Activity, 
   Clock, BarChart2, Search, ChevronLeft, ChevronRight, Download, PieChart as PieIcon,
-  Users, Calendar, Layers, DollarSign
+  Users, Calendar, Layers, DollarSign, Trash2 // <-- Ditambahkan Trash2
 } from 'lucide-react';
 import { 
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
@@ -10,7 +10,8 @@ import {
 } from 'recharts';
 
 // --- API CONFIG ---
-const API_URL = 'https://quant-dashboard-eta.vercel.app/api/trades';
+const API_URL = 'https://quant-dashboard-eta.vercel.app/api/trades'; 
+const API_BASE = 'https://quant-dashboard-eta.vercel.app'; // Base URL untuk delete API
 
 // --- HELPER FUNCTIONS ---
 const formatDuration = (ms) => {
@@ -189,7 +190,6 @@ export default function TradingDashboard() {
   const [itemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState({ key: 'openDate', direction: 'desc' });
 
-  // STATE BARU: Indikator Pulse, Timestamp, Latency, Risk
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [isSystemOnline, setIsSystemOnline] = useState(true);
   const [latency, setLatency] = useState(0);
@@ -208,14 +208,14 @@ export default function TradingDashboard() {
     weekday: [], hourly: [], symbolPerf: []
   });
 
+  // --- LOGIKA FETCH DATA ---
   const fetchTrades = async () => {
-    const startTime = Date.now(); // Start timer latency
+    const startTime = Date.now();
     try {
       const url = selectedAccount === 'ALL' ? API_URL : `${API_URL}?accountId=${selectedAccount}`;
       const response = await fetch(url);
       const data = await response.json();
       
-      // Calculate Latency
       const endTime = Date.now();
       setLatency(endTime - startTime);
 
@@ -293,7 +293,7 @@ export default function TradingDashboard() {
           net += pnl;
           totalQty += qty;
           closedTradesCount++;
-          totalDurationMs += (qty * 1000 * 60 * 30); // Mock
+          totalDurationMs += (qty * 1000 * 60 * 30); 
           
           if (pnl >= 0) { grossP += pnl; wins++; if (pnl > best) best = pnl; } 
           else { grossL += Math.abs(pnl); if (pnl < worst) worst = pnl; }
@@ -370,8 +370,38 @@ export default function TradingDashboard() {
   const totalPages = Math.ceil(sortedAndFilteredTrades.length / itemsPerPage);
   const requestSort = (key) => { let direction = 'asc'; if (sortConfig.key === key && sortConfig.direction === 'asc') { direction = 'desc'; } setSortConfig({ key, direction }); };
 
-  // --- LOGIC: RISK WARNING ---
-  // Jika Floating Loss > 5% dari Balance, nyalakan Red Alert
+  // --- LOGIC: DELETE ACCOUNT ---
+  const handleDeleteAccount = async () => {
+    if (selectedAccount === 'ALL') {
+        alert("Pilih akun spesifik yang ingin dihapus terlebih dahulu!");
+        return;
+    }
+
+    const isConfirmed = window.confirm(`⚠️ PERINGATAN KERAS ⚠️\n\nAnda akan menghapus SELURUH data untuk Akun: ${selectedAccount}.\n\nTindakan ini tidak bisa dibatalkan. Apakah Anda yakin?`);
+    
+    if (isConfirmed) {
+        // Minta kunci rahasia
+        const userSecret = prompt("Masukkan KUNCI RAHASIA Admin untuk konfirmasi penghapusan:");
+        
+        if (!userSecret) return;
+
+        try {
+            const res = await fetch(`${API_BASE}/api/delete-account?secret=${userSecret}&targetAccount=${selectedAccount}`);
+            const result = await res.json();
+            
+            if (res.ok) {
+                alert(`✅ BERHASIL: ${result.message || 'Akun telah dihapus.'}`);
+                setSelectedAccount('ALL'); 
+                window.location.reload(); 
+            } else {
+                alert(`❌ GAGAL: ${result.error}`);
+            }
+        } catch (error) {
+            alert("❌ GAGAL: Terjadi kesalahan koneksi.");
+        }
+    }
+  };
+
   const isHighRisk = extraMetrics.balance > 0 && (extraMetrics.floatingPnL / extraMetrics.balance) < -0.05;
 
   return (
@@ -391,14 +421,27 @@ export default function TradingDashboard() {
         </div>
         
         <div className="flex gap-2 items-center">
-            {/* Account Selector */}
-            <div className="relative group bg-[#111] rounded-lg border border-[#222] flex items-center px-3 py-2 gap-2">
-                 <Users size={14} className="text-gray-500"/>
-                 <select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)} className="bg-transparent text-xs font-bold text-gray-300 focus:outline-none appearance-none cursor-pointer min-w-[120px]">
-                    <option value="ALL">ALL ACCOUNTS</option>
-                    {availableAccounts.map(acc => ( <option key={acc} value={acc}>Account {acc} {trades.length > 0 && trades[0].accountId === acc ? ' (Active)' : ''}</option> ))}
-                </select>
-                <div className="pointer-events-none text-gray-500 text-[10px]">▼</div>
+            {/* Account Selector + DELETE BUTTON */}
+            <div className="flex items-center gap-2">
+                <div className="relative group bg-[#111] rounded-lg border border-[#222] flex items-center px-3 py-2 gap-2">
+                    <Users size={14} className="text-gray-500"/>
+                    <select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)} className="bg-transparent text-xs font-bold text-gray-300 focus:outline-none appearance-none cursor-pointer min-w-[120px]">
+                        <option value="ALL">ALL ACCOUNTS</option>
+                        {availableAccounts.map(acc => ( <option key={acc} value={acc}>Account {acc} {trades.length > 0 && trades[0].accountId === acc ? ' (Active)' : ''}</option> ))}
+                    </select>
+                    <div className="pointer-events-none text-gray-500 text-[10px]">▼</div>
+                </div>
+
+                {/* TOMBOL DELETE (Hanya Muncul jika Akun Dipilih) */}
+                {selectedAccount !== 'ALL' && (
+                    <button 
+                        onClick={handleDeleteAccount}
+                        className="p-2.5 rounded-lg bg-red-900/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                        title="Hapus Data Akun Ini"
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                )}
             </div>
             
             <button onClick={() => downloadCSV(trades)} className="bg-[#111] hover:bg-[#222] px-4 py-2 rounded-lg border border-[#222] flex items-center gap-2 transition-all text-xs font-bold text-gray-400 hover:text-white"><Download size={14} /> EXPORT</button>
@@ -425,14 +468,13 @@ export default function TradingDashboard() {
         
         {/* --- SECTION: FINANCIAL OVERVIEW --- */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {/* Equity Card with Risk Alert */}
           <OverviewCard 
             title="Current Equity" 
             value={formatCurrency(extraMetrics.equity)} 
             isNegative={false} 
             icon={DollarSign} 
             subValue={`${extraMetrics.floatingPnL >= 0 ? '+' : ''}${formatCurrency(extraMetrics.floatingPnL)} Floating`} 
-            isAlert={isHighRisk} // Blink Red if High Risk
+            isAlert={isHighRisk} 
           />
           <OverviewCard title="Current Balance" value={formatCurrency(extraMetrics.balance)} icon={Layers} />
           <OverviewCard title="Net Return" value={formatCurrency(stats.netProfit)} isNegative={stats.netProfit < 0} icon={TrendingUp} />
