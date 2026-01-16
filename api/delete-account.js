@@ -34,10 +34,9 @@ export default async function handler(req, res) {
 
     const { secret, targetAccount } = req.query;
 
-    // 2. Gunakan Password Sederhana dulu untuk Tes
-    // Nanti bisa diganti lagi ke KUNCI_RAHASIA... jika sudah sukses
-    if (secret !== "123") { 
-        return res.status(401).json({ error: "Password Salah! Coba gunakan '123'" });
+    // GANTI "123" KEMBALI KE KUNCI ASLI ANDA
+    if (secret !== "KUNCI_RAHASIA_TRADING_SAYA_2026") { 
+        return res.status(401).json({ error: "Dilarang masuk! Kunci salah." });
     }
 
     if (!targetAccount) {
