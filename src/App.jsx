@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   HelpCircle, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Activity, 
   Clock, BarChart2, Search, ChevronLeft, ChevronRight, Download, PieChart as PieIcon,
-  Users, Calendar, Layers, DollarSign, List
+  Users, Calendar, Layers, DollarSign
 } from 'lucide-react';
 import { 
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
@@ -37,19 +37,16 @@ const downloadCSV = (data) => {
     document.body.removeChild(link);
 };
 
-// --- AUDIO UTILITY (NEW) ---
-// Menggunakan URL suara publik agar Anda tidak perlu download file manual.
-// Suara: "Coin Win / Success" effect.
+// --- AUDIO UTILITY ---
 const playWinSound = () => {
     try {
         const audio = new Audio("https://cdn.pixabay.com/audio/2021/08/04/audio_0625c1539c.mp3"); 
         audio.volume = 0.5;
-        // Browser modern butuh interaksi user minimal 1x sebelum autoplay jalan
-        audio.play().catch(e => console.log("Audio play blocked (user interaction needed):", e));
+        audio.play().catch(e => console.log("Audio play blocked:", e));
     } catch (e) { console.error("Audio Error:", e); }
 };
 
-// --- KOMPONEN UI LAMA (KEPT) ---
+// --- KOMPONEN UI ---
 
 const StatusBadge = ({ status }) => {
   const label = status || '';
@@ -80,18 +77,17 @@ const StatCard = ({ label, value, prefix = '$', icon: Icon, subValue = null }) =
   </div>
 );
 
-// --- KOMPONEN UI BARU (ADDED) ---
-
-const OverviewCard = ({ title, value, subValue, isNegative, icon: Icon }) => (
-  <div className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-xl p-4 relative overflow-hidden group hover:border-gray-700 transition-all">
+// New Overview Card with Risk Alert Support
+const OverviewCard = ({ title, value, subValue, isNegative, icon: Icon, isAlert = false }) => (
+  <div className={`border rounded-xl p-4 relative overflow-hidden group transition-all duration-500 ${isAlert ? 'bg-red-900/10 border-red-500/50 animate-pulse' : 'bg-[#0A0A0A] border-[#1C1C1C] hover:border-gray-700'}`}>
     <div className="flex justify-between items-start mb-2">
-      <span className="text-gray-500 text-[10px] uppercase font-bold tracking-wider">{title}</span>
-      {Icon && <Icon size={14} className="text-gray-600 group-hover:text-blue-500 transition-colors" />}
+      <span className={`text-[10px] uppercase font-bold tracking-wider ${isAlert ? 'text-red-400' : 'text-gray-500'}`}>{title}</span>
+      {Icon && <Icon size={14} className={`${isAlert ? 'text-red-400' : 'text-gray-600'} group-hover:text-blue-500 transition-colors`} />}
     </div>
-    <div className={`text-xl font-bold font-mono tracking-tight ${isNegative ? 'text-red-400' : 'text-gray-100'}`}>
+    <div className={`text-xl font-bold font-mono tracking-tight ${isNegative || isAlert ? 'text-red-400' : 'text-gray-100'}`}>
       {value}
     </div>
-    {subValue && <div className="text-[10px] text-gray-500 mt-1 font-mono">{subValue}</div>}
+    {subValue && <div className={`text-[10px] mt-1 font-mono ${isAlert ? 'text-red-300 font-bold' : 'text-gray-500'}`}>{subValue}</div>}
   </div>
 );
 
@@ -108,8 +104,6 @@ const SimpleBarChart = ({ data, xKey, yKey, color }) => (
     </BarChart>
   </ResponsiveContainer>
 );
-
-// --- KOMPONEN CHARTS LAMA (KEPT) ---
 
 const AdvancedChart = ({ data }) => {
   const [view, setView] = useState('equity'); 
@@ -195,18 +189,17 @@ export default function TradingDashboard() {
   const [itemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState({ key: 'openDate', direction: 'desc' });
 
-  // STATE BARU: Untuk indikator Pulse & Timestamp
+  // STATE BARU: Indikator Pulse, Timestamp, Latency, Risk
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [isSystemOnline, setIsSystemOnline] = useState(true);
+  const [latency, setLatency] = useState(0);
 
-  // 1. STATS LAMA (Untuk Grid Kartu Lama)
   const [stats, setStats] = useState({
     netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0,
     profitFactor: 0, totalTrades: 0, bestProfit: 0, biggestLoss: 0,
     expectancy: 0, avgTradeSize: 0, avgDuration: "0h:00m:00s"
   });
 
-  // 2. STATS BARU (Untuk Overview & Charts)
   const [extraMetrics, setExtraMetrics] = useState({
     equity: 0, balance: 0, dailyDD: 0, maxDD: 0, tradingDays: 0, floatingPnL: 0
   });
@@ -216,11 +209,16 @@ export default function TradingDashboard() {
   });
 
   const fetchTrades = async () => {
+    const startTime = Date.now(); // Start timer latency
     try {
       const url = selectedAccount === 'ALL' ? API_URL : `${API_URL}?accountId=${selectedAccount}`;
       const response = await fetch(url);
       const data = await response.json();
       
+      // Calculate Latency
+      const endTime = Date.now();
+      setLatency(endTime - startTime);
+
       const tradeMap = new Map();
       data.forEach(trade => {
           const id = trade.id;
@@ -242,11 +240,7 @@ export default function TradingDashboard() {
           cleanData = cleanData.filter(t => String(t.accountId) === String(selectedAccount));
       }
 
-      // --- LOGIKA AUDIO ALERT BARU ---
-      // Jika data baru lebih banyak dari data lama (ada trade baru)
-      // DAN trade terbaru statusnya 'Win'
       if (cleanData.length > trades.length && trades.length > 0) {
-        // Asumsi data terbaru ada di index 0 atau kita cari tiket yg baru
         const newTrade = cleanData.find(t => !trades.find(old => old.id === t.id));
         if (newTrade && newTrade.status === 'Win') {
             playWinSound();
@@ -254,14 +248,12 @@ export default function TradingDashboard() {
       }
 
       setTrades(cleanData);
-      
-      // Update System Status
       setLastUpdated(new Date());
       setIsSystemOnline(true);
 
     } catch (error) { 
         console.error(error); 
-        setIsSystemOnline(false); // Set merah jika error
+        setIsSystemOnline(false); 
     }
   };
 
@@ -271,7 +263,6 @@ export default function TradingDashboard() {
     return () => clearInterval(interval);
   }, [selectedAccount]); 
 
-  // --- CALCULATION LOGIC (COMBINED) ---
   useEffect(() => {
     if (trades.length === 0) {
         setStats({ netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0, profitFactor: 0, totalTrades: 0, bestProfit: 0, biggestLoss: 0, expectancy: 0, avgTradeSize: 0, avgDuration: "0h:00m:00s" });
@@ -280,11 +271,9 @@ export default function TradingDashboard() {
         return;
     }
     
-    // OLD STATS VARS
     let net = 0, grossP = 0, grossL = 0, wins = 0; let best = 0, worst = 0;
     let totalQty = 0; let totalDurationMs = 0; let closedTradesCount = 0;
     
-    // NEW STATS VARS
     let floating = 0, balance = 0;
     let currentEqCurve = 0, maxEq = 0, maxDD = 0;
     const uniqueDays = new Set();
@@ -294,40 +283,35 @@ export default function TradingDashboard() {
 
     const sortedForDD = [...trades].sort((a,b) => a.openDate.localeCompare(b.openDate));
 
-    // MAIN LOOP
     sortedForDD.forEach(t => {
       const pnl = parseFloat(t.pnl); const qty = parseFloat(t.qty || 0);
       
       if (t.status === 'Open') {
           floating += pnl;
       } else {
-          // Shared Stats
           balance += pnl;
           net += pnl;
           totalQty += qty;
           closedTradesCount++;
-          totalDurationMs += (qty * 1000 * 60 * 30); // Mock duration
+          totalDurationMs += (qty * 1000 * 60 * 30); // Mock
           
           if (pnl >= 0) { grossP += pnl; wins++; if (pnl > best) best = pnl; } 
           else { grossL += Math.abs(pnl); if (pnl < worst) worst = pnl; }
 
           uniqueDays.add(t.openDate.split(' ')[0]);
 
-          // Charts Logic
           const d = new Date(t.openDate.replace(/\./g, '-'));
           if(!isNaN(d)) {
               weekdayPnl[d.getDay()] += pnl;
               hourlyPnl[d.getHours()] += pnl;
           }
 
-          // DD Logic
           currentEqCurve += pnl;
           if(currentEqCurve > maxEq) maxEq = currentEqCurve;
           const dd = maxEq - currentEqCurve;
           if(dd > maxDD) maxDD = dd;
       }
 
-      // Symbol Stats
       if(!symbolStats[t.symbol]) symbolStats[t.symbol] = { vol:0, trades:0, wins:0, losses:0, pnl:0 };
       symbolStats[t.symbol].vol += qty;
       symbolStats[t.symbol].trades += 1;
@@ -341,20 +325,17 @@ export default function TradingDashboard() {
     const wr = total > 0 ? Math.round((wins / (closedTradesCount || 1)) * 100) : 0;
     const pf = grossL > 0 ? (grossP / grossL).toFixed(2) : (grossP > 0 ? '∞' : '0.00');
     
-    // SET OLD STATS
     setStats({
       netProfit: net.toFixed(2), grossProfit: grossP.toFixed(2), grossLoss: grossL.toFixed(2), winRate: wr, profitFactor: pf, totalTrades: total,
       bestProfit: best.toFixed(2), biggestLoss: Math.abs(worst).toFixed(2), expectancy: closedTradesCount > 0 ? (net / closedTradesCount).toFixed(2) : 0,
       avgTradeSize: closedTradesCount > 0 ? (totalQty / closedTradesCount).toFixed(2) : 0, avgDuration: closedTradesCount > 0 ? formatDuration(totalDurationMs / closedTradesCount) : "0h:00m:00s"
     });
 
-    // SET NEW STATS
     const dailyDD = floating < 0 ? Math.abs(floating) : 0;
     setExtraMetrics({
         equity: balance + floating, balance, dailyDD, maxDD, tradingDays: uniqueDays.size, floatingPnL: floating
     });
 
-    // SET CHARTS
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     setCharts({
         weekday: weekdayPnl.map((v, i) => ({ day: days[i], val: v })).filter(d => d.day !== 'Sun' && d.day !== 'Sat'),
@@ -389,6 +370,10 @@ export default function TradingDashboard() {
   const totalPages = Math.ceil(sortedAndFilteredTrades.length / itemsPerPage);
   const requestSort = (key) => { let direction = 'asc'; if (sortConfig.key === key && sortConfig.direction === 'asc') { direction = 'desc'; } setSortConfig({ key, direction }); };
 
+  // --- LOGIC: RISK WARNING ---
+  // Jika Floating Loss > 5% dari Balance, nyalakan Red Alert
+  const isHighRisk = extraMetrics.balance > 0 && (extraMetrics.floatingPnL / extraMetrics.balance) < -0.05;
+
   return (
     <div className="min-h-screen bg-[#050505] text-gray-200 p-6 md:p-8 font-sans selection:bg-green-500/30">
       
@@ -399,7 +384,10 @@ export default function TradingDashboard() {
                 <Activity className="text-green-500" size={32} /> QUANT DASHBOARD 
                 <span className="text-[10px] bg-green-500/10 text-green-500 border border-green-500/20 px-2 py-0.5 rounded uppercase tracking-wider animate-pulse">Live System</span>
             </h1>
-            <p className="text-gray-500 text-xs mt-1 tracking-wide font-mono">Connected to MT5 Localhost via Node.js Bridge • Latency: &lt;10ms</p>
+            <p className="text-gray-500 text-xs mt-1 tracking-wide font-mono flex items-center gap-1">
+                Connected via Node.js Bridge • Latency: 
+                <span className={`font-bold ${latency > 500 ? 'text-red-500' : latency > 200 ? 'text-yellow-500' : 'text-green-500'}`}> {latency}ms</span>
+            </p>
         </div>
         
         <div className="flex gap-2 items-center">
@@ -415,7 +403,7 @@ export default function TradingDashboard() {
             
             <button onClick={() => downloadCSV(trades)} className="bg-[#111] hover:bg-[#222] px-4 py-2 rounded-lg border border-[#222] flex items-center gap-2 transition-all text-xs font-bold text-gray-400 hover:text-white"><Download size={14} /> EXPORT</button>
             
-            {/* NEW: PULSE INDICATOR & TIMESTAMP */}
+            {/* INDICATOR PULSE */}
             <div className={`bg-[#111] px-4 py-1.5 rounded-lg border flex flex-col items-end min-w-[120px] transition-all duration-500 ${isSystemOnline ? 'border-[#222]' : 'border-red-900/50 bg-red-900/10'}`}>
                 <div className="flex items-center gap-2">
                     <div className="relative flex h-2 w-2">
@@ -435,9 +423,17 @@ export default function TradingDashboard() {
 
       <div className="max-w-[1600px] mx-auto space-y-6">
         
-        {/* --- [NEW] SECTION: FINANCIAL OVERVIEW --- */}
+        {/* --- SECTION: FINANCIAL OVERVIEW --- */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <OverviewCard title="Current Equity" value={formatCurrency(extraMetrics.equity)} isNegative={false} icon={DollarSign} subValue={`${extraMetrics.floatingPnL >= 0 ? '+' : ''}${formatCurrency(extraMetrics.floatingPnL)} Floating`} />
+          {/* Equity Card with Risk Alert */}
+          <OverviewCard 
+            title="Current Equity" 
+            value={formatCurrency(extraMetrics.equity)} 
+            isNegative={false} 
+            icon={DollarSign} 
+            subValue={`${extraMetrics.floatingPnL >= 0 ? '+' : ''}${formatCurrency(extraMetrics.floatingPnL)} Floating`} 
+            isAlert={isHighRisk} // Blink Red if High Risk
+          />
           <OverviewCard title="Current Balance" value={formatCurrency(extraMetrics.balance)} icon={Layers} />
           <OverviewCard title="Net Return" value={formatCurrency(stats.netProfit)} isNegative={stats.netProfit < 0} icon={TrendingUp} />
           <OverviewCard title="Daily Drawdown" value={`-${formatCurrency(extraMetrics.dailyDD)}`} isNegative={true} icon={TrendingDown} />
@@ -445,7 +441,7 @@ export default function TradingDashboard() {
           <OverviewCard title="Trading Days" value={extraMetrics.tradingDays} icon={Calendar} />
         </div>
 
-        {/* --- [OLD] SECTION: STATS CARDS & GAUGE --- */}
+        {/* --- SECTION: STATS CARDS & GAUGE --- */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 grid grid-cols-2 md:grid-cols-3 gap-4">
             <StatCard label="Net Profit" value={stats.netProfit} icon={TrendingUp} />
@@ -465,7 +461,7 @@ export default function TradingDashboard() {
           </div>
         </div>
 
-        {/* --- [OLD] SECTION: MAIN CHARTS --- */}
+        {/* --- SECTION: MAIN CHARTS --- */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 bg-[#0A0A0A] border border-[#1C1C1C] rounded-2xl p-6 h-[300px]">
               <AdvancedChart data={trades} />
@@ -475,7 +471,7 @@ export default function TradingDashboard() {
           </div>
         </div>
 
-        {/* --- [NEW] SECTION: ADVANCED ANALYSIS CHARTS --- */}
+        {/* --- SECTION: ADVANCED ANALYSIS CHARTS --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-xl p-5 h-[280px]">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">P & L by Weekday</h3>
@@ -487,7 +483,7 @@ export default function TradingDashboard() {
              </div>
         </div>
 
-        {/* --- [NEW] SECTION: SYMBOL PERFORMANCE TABLE --- */}
+        {/* --- SECTION: SYMBOL PERFORMANCE TABLE --- */}
         <div className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-xl overflow-hidden">
           <div className="p-4 border-b border-[#1C1C1C]"><h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2"><BarChart2 size={14}/> Symbol Performance</h3></div>
           <div className="overflow-x-auto max-h-[300px]">
@@ -514,7 +510,7 @@ export default function TradingDashboard() {
           </div>
         </div>
 
-        {/* --- [OLD] SECTION: TRADE HISTORY TABLE --- */}
+        {/* --- SECTION: TRADE HISTORY TABLE --- */}
         <div className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-2xl p-6 md:p-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div className="flex items-center gap-4"><h2 className="text-lg font-bold text-white tracking-tight">Trade History</h2><span className="text-[10px] text-gray-500 bg-[#111] px-2 py-1 rounded border border-[#222]">Total: {sortedAndFilteredTrades.length} trades</span><span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 uppercase">VIEW: {selectedAccount}</span></div>
