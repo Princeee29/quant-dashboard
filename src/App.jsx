@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   HelpCircle, ArrowUpRight, ArrowDownRight, TrendingUp, Activity, 
   Clock, BarChart2, Search, ChevronLeft, ChevronRight, Download, PieChart as PieIcon,
-  Users // Icon baru untuk selector akun
+  Users 
 } from 'lucide-react';
 import { 
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 
 // --- API CONFIG ---
+// Pastikan link ini sesuai dengan project Vercel Anda
 const API_URL = 'https://quant-dashboard-eta.vercel.app/api/trades';
 
 // --- HELPER FUNCTIONS ---
@@ -30,7 +31,6 @@ const formatCurrency = (value) => {
 };
 
 const downloadCSV = (data) => {
-    // Menambahkan kolom Account ke CSV
     const headers = ["Ticket", "Account", "Open Date", "Symbol", "Side", "Entry", "Exit", "Qty", "PnL", "Status"];
     const rows = data.map(t => [
         t.id, t.accountId || 'N/A', t.openDate, t.symbol, t.side, t.entry, t.exit, t.qty, t.pnl, t.status
@@ -326,10 +326,9 @@ export default function TradingDashboard() {
   const [itemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState({ key: 'openDate', direction: 'desc' });
   
-  // -- NEW STATE FOR MULTI ACCOUNT --
+  // -- NEW STATE FOR AUTO-DETECT MULTI ACCOUNT --
   const [selectedAccount, setSelectedAccount] = useState('ALL');
-  // Anda bisa mengganti daftar ini manual, atau membuatnya dinamis
-  const [availableAccounts, setAvailableAccounts] = useState(['12014650', 'Demo-Test-2', 'Bot-Account-3']); 
+  const [availableAccounts, setAvailableAccounts] = useState([]); // Array kosong, akan terisi otomatis
 
   const [stats, setStats] = useState({
     netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0,
@@ -339,7 +338,7 @@ export default function TradingDashboard() {
 
   const fetchTrades = async () => {
     try {
-      // Logic URL dengan Query Param
+      // Logic URL: jika ALL, fetch semua; jika ada akun dipilih, fetch khusus akun tersebut
       const url = selectedAccount === 'ALL' 
         ? API_URL 
         : `${API_URL}?accountId=${selectedAccount}`;
@@ -349,10 +348,16 @@ export default function TradingDashboard() {
       const data = await response.json();
       setTrades(data);
       
-      // Opsional: Deteksi akun dari data yang masuk jika mode ALL
-      if(selectedAccount === 'ALL' && data.length > 0) {
-          const uniqueAccs = [...new Set(data.map(d => d.accountId).filter(Boolean))];
-          if(uniqueAccs.length > 0) setAvailableAccounts(uniqueAccs);
+      // -- LOGIKA DETEKSI AKUN OTOMATIS --
+      if(data.length > 0) {
+          // Ambil daftar akun dari data yang masuk
+          const incomingAccounts = data.map(d => d.accountId).filter(Boolean);
+          
+          // Gabungkan dengan akun yang sudah terdeteksi sebelumnya, lalu hilangkan duplikat
+          setAvailableAccounts(prevAccounts => {
+              const uniqueSet = new Set([...prevAccounts, ...incomingAccounts]);
+              return Array.from(uniqueSet).sort(); // Urutkan agar rapi
+          });
       }
 
     } catch (error) { }
@@ -362,11 +367,10 @@ export default function TradingDashboard() {
     fetchTrades();
     const interval = setInterval(fetchTrades, 2000);
     return () => clearInterval(interval);
-  }, [selectedAccount]); // Dependency ditambahkan agar refresh saat ganti akun
+  }, [selectedAccount]); 
 
   useEffect(() => {
     if (trades.length === 0) {
-        // Reset stats jika tidak ada data
         setStats({
             netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0,
             profitFactor: 0, totalTrades: 0, bestProfit: 0, biggestLoss: 0,
@@ -438,7 +442,7 @@ export default function TradingDashboard() {
         </div>
         
         <div className="flex gap-2 items-center">
-            {/* --- ACCOUNT SELECTOR (BARU) --- */}
+            {/* --- AUTO DETECT ACCOUNT SELECTOR --- */}
             <div className="relative group bg-[#111] rounded-lg border border-[#222] flex items-center px-3 py-2 gap-2">
                  <Users size={14} className="text-gray-500"/>
                  <select 
@@ -448,7 +452,11 @@ export default function TradingDashboard() {
                 >
                     <option value="ALL">ALL ACCOUNTS</option>
                     {availableAccounts.map(acc => (
-                         <option key={acc} value={acc}>Account {acc}</option>
+                         <option key={acc} value={acc}>
+                            Account {acc} 
+                            {/* Menandai akun yang aktif di transaksi terbaru */}
+                            {trades.length > 0 && trades[0].accountId === acc ? ' (Active)' : ''}
+                         </option>
                     ))}
                 </select>
                 <div className="pointer-events-none text-gray-500 text-[10px]">▼</div>
