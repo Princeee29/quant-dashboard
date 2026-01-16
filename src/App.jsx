@@ -9,9 +9,9 @@ import {
 } from 'recharts';
 
 // --- API CONFIG ---
-// Ganti baris API_URL dengan link Vercel Anda yang lengkap + /api/trades
-// Contoh (Sesuaikan dengan link Anda!):
-const API_URL = 'https://quant-dashboard-45vdwr8q7-prince77s-projects.vercel.app/api/trades';
+// Ganti bagian depan link ini dengan link Vercel Anda yang paling pendek (domain utama)
+// Pastikan berakhiran /api/trades
+const API_URL = 'https://quant-dashboard-eta.vercel.app/api/trades';
 
 // --- HELPER FUNCTIONS ---
 const formatDuration = (ms) => {
