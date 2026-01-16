@@ -9,7 +9,11 @@ import {
 } from 'recharts';
 
 // --- API CONFIG ---
-const API_URL = 'http://127.0.0.1:3000/api/trades';
+// Jika sedang di Vercel (Production), pakai jalur relatif '/api/trades'
+// Jika sedang di Laptop (Development), pakai localhost
+const API_URL = import.meta.env.PROD 
+  ? '/api/trades' 
+  : 'http://localhost:3000/api/trades';
 
 // --- HELPER FUNCTIONS ---
 const formatDuration = (ms) => {
