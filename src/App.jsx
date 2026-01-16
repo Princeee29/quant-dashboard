@@ -338,29 +338,69 @@ export default function TradingDashboard() {
 
   const fetchTrades = async () => {
     try {
-      // Logic URL: jika ALL, fetch semua; jika ada akun dipilih, fetch khusus akun tersebut
-      const url = selectedAccount === 'ALL' 
-        ? API_URL 
-        : `${API_URL}?accountId=${selectedAccount}`;
-
-      const response = await fetch(url);
+      // 1. Ambil SEMUA data (tanpa filter di server dulu agar kita bisa cleaning di frontend)
+      // Kita akan memfilter secara lokal untuk menangani duplikasi
+      const response = await fetch(API_URL); 
       if (!response.ok) throw new Error('Network response was not ok');
-      const data = await response.json();
-      setTrades(data);
       
-      // -- LOGIKA DETEKSI AKUN OTOMATIS --
-      if(data.length > 0) {
-          // Ambil daftar akun dari data yang masuk
-          const incomingAccounts = data.map(d => d.accountId).filter(Boolean);
+      const rawData = await response.json();
+      
+      // 2. PROSES DEDUPLIKASI & CLEANING (Logika Penting!)
+      const tradeMap = new Map();
+      
+      rawData.forEach(trade => {
+          const id = trade.id;
           
-          // Gabungkan dengan akun yang sudah terdeteksi sebelumnya, lalu hilangkan duplikat
+          // Jika tiket ini belum ada di map, masukkan
+          if (!tradeMap.has(id)) {
+              tradeMap.set(id, trade);
+          } else {
+              // Jika tiket sudah ada, kita harus memilih mana yang lebih valid
+              const existing = tradeMap.get(id);
+              
+              // Prioritas 1: Pilih yang punya Account ID (Data Baru) dibanding yang tidak (Data Lama)
+              const existingHasAccount = existing.accountId && existing.accountId !== 'undefined';
+              const newHasAccount = trade.accountId && trade.accountId !== 'undefined';
+              
+              if (!existingHasAccount && newHasAccount) {
+                  tradeMap.set(id, trade); // Timpa dengan data baru yang ada akunnya
+                  return;
+              }
+              
+              // Prioritas 2: Pilih yang statusnya SELESAI (Win/Loss) dibanding yang masih OPEN
+              if (existing.status === 'Open' && trade.status !== 'Open') {
+                  tradeMap.set(id, trade);
+              }
+          }
+      });
+      
+      // Ubah Map kembali menjadi Array
+      let cleanData = Array.from(tradeMap.values());
+      
+      // 3. LOGIKA DETEKSI AKUN (Diperbarui)
+      if(cleanData.length > 0) {
+          const incomingAccounts = cleanData
+            .map(d => d.accountId)
+            .filter(acc => acc && acc !== 'undefined' && acc !== 'null'); // Filter yang valid saja
+            
           setAvailableAccounts(prevAccounts => {
               const uniqueSet = new Set([...prevAccounts, ...incomingAccounts]);
-              return Array.from(uniqueSet).sort(); // Urutkan agar rapi
+              return Array.from(uniqueSet).sort();
           });
       }
 
-    } catch (error) { }
+      // 4. FILTER SESUAI PILIHAN DROPDOWN (Client-Side Filter)
+      if (selectedAccount !== 'ALL') {
+          cleanData = cleanData.filter(t => {
+              // Jika data lama tidak punya akun, kita anggap dia 'Legacy'
+              // Atau kita sembunyikan. Di sini kita hanya tampilkan yang match persis.
+              return String(t.accountId) === String(selectedAccount);
+          });
+      }
+
+      setTrades(cleanData);
+
+    } catch (error) { console.error(error); }
   };
 
   useEffect(() => {
