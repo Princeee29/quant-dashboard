@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   HelpCircle, ArrowUpRight, ArrowDownRight, TrendingUp, Activity, 
-  Clock, BarChart2, Search, ChevronLeft, ChevronRight, Download, PieChart as PieIcon 
+  Clock, BarChart2, Search, ChevronLeft, ChevronRight, Download, PieChart as PieIcon,
+  Users // Icon baru untuk selector akun
 } from 'lucide-react';
 import { 
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
@@ -9,8 +10,6 @@ import {
 } from 'recharts';
 
 // --- API CONFIG ---
-// Ganti bagian depan link ini dengan link Vercel Anda yang paling pendek (domain utama)
-// Pastikan berakhiran /api/trades
 const API_URL = 'https://quant-dashboard-eta.vercel.app/api/trades';
 
 // --- HELPER FUNCTIONS ---
@@ -31,9 +30,10 @@ const formatCurrency = (value) => {
 };
 
 const downloadCSV = (data) => {
-    const headers = ["Ticket", "Open Date", "Symbol", "Side", "Entry", "Exit", "Qty", "PnL", "Status"];
+    // Menambahkan kolom Account ke CSV
+    const headers = ["Ticket", "Account", "Open Date", "Symbol", "Side", "Entry", "Exit", "Qty", "PnL", "Status"];
     const rows = data.map(t => [
-        t.id, t.openDate, t.symbol, t.side, t.entry, t.exit, t.qty, t.pnl, t.status
+        t.id, t.accountId || 'N/A', t.openDate, t.symbol, t.side, t.entry, t.exit, t.qty, t.pnl, t.status
     ]);
     
     const csvContent = "data:text/csv;charset=utf-8," 
@@ -203,16 +203,14 @@ const AdvancedChart = ({ data }) => {
   );
 };
 
-// --- ANALYTICS WIDGET (NEW!) ---
+// --- ANALYTICS WIDGET ---
 const AnalyticsCharts = ({ trades }) => {
-    // 1. Symbol Distribution
     const symbolData = useMemo(() => {
         const counts = {};
         trades.forEach(t => { counts[t.symbol] = (counts[t.symbol] || 0) + 1; });
         return Object.keys(counts).map(key => ({ name: key, value: counts[key] }));
     }, [trades]);
 
-    // 2. Side Distribution
     const sideData = useMemo(() => {
         const counts = { Buy: 0, Sell: 0 };
         trades.forEach(t => { if(t.side === 'Buy' || t.side === 'Sell') counts[t.side]++; });
@@ -230,7 +228,6 @@ const AnalyticsCharts = ({ trades }) => {
              </div>
              
              <div className="flex-1 grid grid-cols-2 gap-2">
-                 {/* Symbol Pie */}
                  <div className="bg-[#050505] rounded-xl border border-[#222] p-2 relative flex flex-col items-center justify-center">
                     <div className="absolute top-2 left-2 text-[9px] text-gray-500 font-bold uppercase">Symbol Mix</div>
                     <ResponsiveContainer width="100%" height="80%">
@@ -245,14 +242,13 @@ const AnalyticsCharts = ({ trades }) => {
                     </ResponsiveContainer>
                  </div>
 
-                 {/* Side Pie */}
                  <div className="bg-[#050505] rounded-xl border border-[#222] p-2 relative flex flex-col items-center justify-center">
                     <div className="absolute top-2 left-2 text-[9px] text-gray-500 font-bold uppercase">Side Ratio</div>
                     <ResponsiveContainer width="100%" height="80%">
                         <PieChart>
                             <Pie data={sideData} innerRadius={35} outerRadius={50} paddingAngle={5} dataKey="value">
-                                <Cell fill="#22c55e" stroke="#050505" /> {/* Buy = Green */}
-                                <Cell fill="#ef4444" stroke="#050505" /> {/* Sell = Red */}
+                                <Cell fill="#22c55e" stroke="#050505" />
+                                <Cell fill="#ef4444" stroke="#050505" />
                             </Pie>
                             <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', fontSize: '10px' }} itemStyle={{color:'#fff'}} />
                         </PieChart>
@@ -329,6 +325,11 @@ export default function TradingDashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState({ key: 'openDate', direction: 'desc' });
+  
+  // -- NEW STATE FOR MULTI ACCOUNT --
+  const [selectedAccount, setSelectedAccount] = useState('ALL');
+  // Anda bisa mengganti daftar ini manual, atau membuatnya dinamis
+  const [availableAccounts, setAvailableAccounts] = useState(['12014650', 'Demo-Test-2', 'Bot-Account-3']); 
 
   const [stats, setStats] = useState({
     netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0,
@@ -338,10 +339,22 @@ export default function TradingDashboard() {
 
   const fetchTrades = async () => {
     try {
-      const response = await fetch(API_URL);
+      // Logic URL dengan Query Param
+      const url = selectedAccount === 'ALL' 
+        ? API_URL 
+        : `${API_URL}?accountId=${selectedAccount}`;
+
+      const response = await fetch(url);
       if (!response.ok) throw new Error('Network response was not ok');
       const data = await response.json();
       setTrades(data);
+      
+      // Opsional: Deteksi akun dari data yang masuk jika mode ALL
+      if(selectedAccount === 'ALL' && data.length > 0) {
+          const uniqueAccs = [...new Set(data.map(d => d.accountId).filter(Boolean))];
+          if(uniqueAccs.length > 0) setAvailableAccounts(uniqueAccs);
+      }
+
     } catch (error) { }
   };
 
@@ -349,20 +362,32 @@ export default function TradingDashboard() {
     fetchTrades();
     const interval = setInterval(fetchTrades, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedAccount]); // Dependency ditambahkan agar refresh saat ganti akun
 
   useEffect(() => {
-    if (trades.length === 0) return;
+    if (trades.length === 0) {
+        // Reset stats jika tidak ada data
+        setStats({
+            netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0,
+            profitFactor: 0, totalTrades: 0, bestProfit: 0, biggestLoss: 0,
+            expectancy: 0, avgTradeSize: 0, avgDuration: "0h:00m:00s"
+        });
+        return;
+    }
+    
     let net = 0, grossP = 0, grossL = 0, wins = 0; let best = 0, worst = 0;
     let totalQty = 0; let totalDurationMs = 0; let closedTradesCount = 0;
+    
     trades.forEach(t => {
       const val = parseFloat(t.pnl); const qty = parseFloat(t.qty || 0); net += val; totalQty += qty;
       if (val >= 0) { grossP += val; wins++; if (val > best) best = val; } else { grossL += Math.abs(val); if (val < worst) worst = val; }
       if (t.status !== 'Open') { closedTradesCount++; totalDurationMs += (qty * 1000 * 60 * 30); }
     });
+    
     const total = trades.length;
     const wr = total > 0 ? Math.round((wins / total) * 100) : 0;
     const pf = grossL > 0 ? (grossP / grossL).toFixed(2) : (grossP > 0 ? '∞' : '0.00');
+    
     setStats({
       netProfit: net.toFixed(2), grossProfit: grossP.toFixed(2), grossLoss: grossL.toFixed(2), winRate: wr, profitFactor: pf, totalTrades: total,
       bestProfit: best.toFixed(2), biggestLoss: Math.abs(worst).toFixed(2), expectancy: total > 0 ? (net / total).toFixed(2) : 0,
@@ -411,13 +436,31 @@ export default function TradingDashboard() {
             </h1>
             <p className="text-gray-500 text-xs mt-1 tracking-wide font-mono">Connected to MT5 Localhost via Node.js Bridge • Latency: &lt;10ms</p>
         </div>
-        <div className="flex gap-2">
+        
+        <div className="flex gap-2 items-center">
+            {/* --- ACCOUNT SELECTOR (BARU) --- */}
+            <div className="relative group bg-[#111] rounded-lg border border-[#222] flex items-center px-3 py-2 gap-2">
+                 <Users size={14} className="text-gray-500"/>
+                 <select 
+                    value={selectedAccount} 
+                    onChange={(e) => setSelectedAccount(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-gray-300 focus:outline-none appearance-none cursor-pointer min-w-[120px]"
+                >
+                    <option value="ALL">ALL ACCOUNTS</option>
+                    {availableAccounts.map(acc => (
+                         <option key={acc} value={acc}>Account {acc}</option>
+                    ))}
+                </select>
+                <div className="pointer-events-none text-gray-500 text-[10px]">▼</div>
+            </div>
+            {/* ------------------------------- */}
+
             <button onClick={() => downloadCSV(trades)} className="bg-[#111] hover:bg-[#222] px-4 py-2 rounded-lg border border-[#222] flex items-center gap-2 transition-all text-xs font-bold text-gray-400 hover:text-white">
-                <Download size={14} /> EXPORT CSV
+                <Download size={14} /> EXPORT
             </button>
             <div className="bg-[#111] px-4 py-2 rounded-lg border border-[#222] flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                <span className="text-[10px] uppercase font-bold text-gray-400">Server: Online</span>
+                <span className="text-[10px] uppercase font-bold text-gray-400">Online</span>
             </div>
         </div>
       </div>
@@ -442,7 +485,7 @@ export default function TradingDashboard() {
             <WinRateGauge percentage={stats.winRate} />
         </div>
 
-        {/* ROW 2: CHART & ANALYTICS (SPLIT 8:4) */}
+        {/* ROW 2: CHART & ANALYTICS */}
         <div className="lg:col-span-8 bg-[#0A0A0A] border border-[#1C1C1C] rounded-2xl p-6 h-[300px]">
              <AdvancedChart data={trades} />
         </div>
@@ -457,6 +500,10 @@ export default function TradingDashboard() {
           <div className="flex items-center gap-4">
              <h2 className="text-lg font-bold text-white tracking-tight">Trade History</h2>
              <span className="text-[10px] text-gray-500 bg-[#111] px-2 py-1 rounded border border-[#222]">Total: {sortedAndFilteredTrades.length} trades</span>
+             {/* Indikator Akun yang Sedang Dilihat */}
+             <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 uppercase">
+                VIEW: {selectedAccount}
+             </span>
           </div>
           <div className="flex flex-wrap gap-3 w-full md:w-auto">
              <div className="relative group">
@@ -475,7 +522,8 @@ export default function TradingDashboard() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-[#1C1C1C]">
-                  {[{ key: 'id', label: 'Ticket' }, { key: 'openDate', label: 'Date' }, { key: 'symbol', label: 'Symbol' }, { key: 'side', label: 'Side' }, { key: 'entry', label: 'Entry' }, { key: 'exit', label: 'Exit' }, { key: 'qty', label: 'Qty' }, { key: 'pnl', label: 'P&L' }, { key: 'status', label: 'Status' }].map((col) => (
+                  {/* Kolom Account ID ditambahkan agar user tahu data mana milik siapa saat view ALL */}
+                  {[{ key: 'id', label: 'Ticket' }, { key: 'accountId', label: 'Account' }, { key: 'openDate', label: 'Date' }, { key: 'symbol', label: 'Symbol' }, { key: 'side', label: 'Side' }, { key: 'entry', label: 'Entry' }, { key: 'exit', label: 'Exit' }, { key: 'qty', label: 'Qty' }, { key: 'pnl', label: 'P&L' }, { key: 'status', label: 'Status' }].map((col) => (
                     <th key={col.key} onClick={() => requestSort(col.key)} className="py-4 px-3 text-[9px] uppercase tracking-widest font-bold text-gray-500 cursor-pointer hover:text-white transition-colors select-none group">
                         <div className="flex items-center gap-1">{col.label} {sortConfig.key === col.key && (<span className="text-green-500">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>)}</div>
                     </th>
@@ -486,6 +534,8 @@ export default function TradingDashboard() {
                 {currentItems.length > 0 ? currentItems.map((trade, idx) => (
                   <tr key={idx} className="border-b border-[#1C1C1C]/40 hover:bg-white/[0.02] transition-colors group">
                     <td className="py-4 px-3 text-gray-500 text-[10px] tabular-nums font-mono border-l-2 border-transparent group-hover:border-green-500 transition-all">{trade.id}</td>
+                    {/* Data Account ID */}
+                    <td className="py-4 px-3 text-blue-400 text-[10px] tabular-nums font-mono opacity-70">{trade.accountId || '-'}</td>
                     <td className="py-4 px-3 text-gray-500 text-[10px] tabular-nums font-mono">{trade.openDate}</td>
                     <td className="py-4 px-3 font-bold text-white text-[11px] tracking-wide">{trade.symbol}</td>
                     <td className="py-4 px-3"><span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-opacity-10 ${trade.side === 'Buy' ? 'text-green-500 bg-green-500' : 'text-red-500 bg-red-500'}`}>{trade.side}</span></td>
@@ -497,7 +547,7 @@ export default function TradingDashboard() {
                     </td>
                     <td className="py-4 px-3"><StatusBadge status={trade.status} /></td>
                   </tr>
-                )) : (<tr><td colSpan="9" className="py-10 text-center text-gray-600 text-xs uppercase tracking-widest">No data match found</td></tr>)}
+                )) : (<tr><td colSpan="10" className="py-10 text-center text-gray-600 text-xs uppercase tracking-widest">No data match found</td></tr>)}
               </tbody>
             </table>
         </div>

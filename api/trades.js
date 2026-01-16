@@ -15,8 +15,10 @@ const connectToDB = async () => {
     }
 };
 
+// Schema harus sama persis dengan report-trade.js
 const tradeSchema = new mongoose.Schema({
-    id: { type: String, required: true, unique: true },
+    id: { type: String, required: true },
+    accountId: { type: String, required: true },
     openDate: String,
     symbol: String,
     side: String,
@@ -30,14 +32,24 @@ const tradeSchema = new mongoose.Schema({
 const Trade = mongoose.models.Trade || mongoose.model('Trade', tradeSchema);
 
 export default async function handler(req, res) {
-    // CORS Headers (Agar bisa diakses dari mana saja)
+    // CORS Headers
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     
     await connectToDB();
     
     if (req.method === 'GET') {
-        const trades = await Trade.find().sort({ _id: -1 });
+        // Ambil parameter accountId dari URL
+        const { accountId } = req.query;
+        
+        let filter = {};
+        
+        // Filter jika accountId ada dan bukan 'ALL'
+        if (accountId && accountId !== 'ALL') {
+            filter = { accountId: accountId };
+        }
+
+        const trades = await Trade.find(filter).sort({ _id: -1 });
         return res.status(200).json(trades);
     }
     
