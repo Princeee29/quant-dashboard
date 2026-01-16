@@ -1,4 +1,3 @@
-// File: api/delete-account.js
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 
@@ -13,7 +12,6 @@ const connectToDB = async () => {
     } catch (error) { console.error("DB Error", error); }
 };
 
-// Definisi struktur data agar kita bisa menghapusnya
 const tradeSchema = new mongoose.Schema({
     id: { type: String, required: true },
     accountId: String, 
@@ -22,10 +20,10 @@ const tradeSchema = new mongoose.Schema({
 const Trade = mongoose.models.Trade || mongoose.model('Trade', tradeSchema);
 
 export default async function handler(req, res) {
-    // KUNCI RAHASIA SEMENTARA: "RAHASIA123"
     const { secret, targetAccount } = req.query;
 
-    if (secret !== "RAHASIA123") {
+    // UPDATE: Sekarang menggunakan API Key asli Anda sebagai pengaman
+    if (secret !== "KUNCI_RAHASIA_TRADING_SAYA_2026") {
         return res.status(401).json({ error: "Dilarang masuk! Salah kunci." });
     }
 
@@ -37,7 +35,6 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
         try {
-            // Perintah menghapus data permanen
             const result = await Trade.deleteMany({ accountId: targetAccount });
 
             return res.status(200).json({ 
@@ -49,4 +46,5 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: error.message });
         }
     }
+    return res.status(405).json({ error: "Method not allowed" });
 }
