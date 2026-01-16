@@ -76,11 +76,15 @@ app.get('/api/trades', async (req, res) => {
     }
 });
 
-// 3. FRONTEND HANDLING
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
+/// --- 3. FRONTEND HANDLING & SERVER START ---
 
-app.listen(PORT, () => {
-    console.log(`🚀 Server Cloud siap di port ${PORT}`);
-});
+// Di Vercel, kita tidak perlu app.listen secara eksplisit untuk production
+// Tapi kita butuh export default app
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`🚀 Server Lokal berjalan di http://localhost:${PORT}`);
+    });
+}
+
+// Penting: Export app agar Vercel bisa menjalankannya
+export default app;
