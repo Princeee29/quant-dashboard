@@ -1,4 +1,3 @@
-// File: api/index.js
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
@@ -8,25 +7,22 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// --- DATABASE CONNECTION ---
-// Kita letakkan di luar handler agar koneksi awet (Cached)
+// --- DATABASE ---
 let isConnected = false;
 const connectToDB = async () => {
     if (isConnected) return;
     try {
         await mongoose.connect(process.env.MONGO_URI);
         isConnected = true;
-        console.log("✅ (Vercel) Connected to MongoDB");
+        console.log("✅ DB Connected");
     } catch (error) {
         console.error("❌ DB Error:", error);
     }
 };
 
-// --- SCHEMA ---
 const tradeSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
     openDate: String,
@@ -39,14 +35,12 @@ const tradeSchema = new mongoose.Schema({
     status: String
 });
 
-// Cek agar model tidak di-compile ulang saat hot-reload
 const Trade = mongoose.models.Trade || mongoose.model('Trade', tradeSchema);
 
-// --- ROUTES ---
-// PENTING: Di Vercel, file "api/index.js" otomatis menjadi base URL "/api"
-// Jadi kita TIDAK PERLU menulis "/api" lagi di dalam route.
+// --- ROUTES (PERBAIKAN DISINI) ---
+// Kita tambahkan prefix '/api' agar cocok dengan URL yang masuk
 
-app.get('/trades', async (req, res) => {
+app.get('/api/trades', async (req, res) => {
     await connectToDB();
     try {
         const trades = await Trade.find().sort({ _id: -1 });
@@ -56,7 +50,7 @@ app.get('/trades', async (req, res) => {
     }
 });
 
-app.post('/report-trade', async (req, res) => {
+app.post('/api/report-trade', async (req, res) => {
     await connectToDB();
     const newData = req.body;
     try {
@@ -65,16 +59,14 @@ app.post('/report-trade', async (req, res) => {
             newData,
             { upsert: true, new: true }
         );
-        res.status(200).send({ message: "Saved to Cloud" });
+        res.status(200).send({ message: "Saved" });
     } catch (error) {
-        res.status(500).send({ error: "Database Error" });
+        res.status(500).send({ error: "DB Error" });
     }
 });
 
-// Route default untuk cek status server
-app.get('/', (req, res) => {
-    res.send("Quant Server is Running...");
+app.get('/api', (req, res) => {
+    res.send("Quant Server Running...");
 });
 
-// Export app agar Vercel bisa menjalankannya
 export default app;
