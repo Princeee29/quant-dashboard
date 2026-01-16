@@ -1,4 +1,4 @@
-// api/delete-account.js
+// File: api/delete-account.js
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 
@@ -13,6 +13,7 @@ const connectToDB = async () => {
     } catch (error) { console.error("DB Error", error); }
 };
 
+// Definisi struktur data agar kita bisa menghapusnya
 const tradeSchema = new mongoose.Schema({
     id: { type: String, required: true },
     accountId: String, 
@@ -21,50 +22,31 @@ const tradeSchema = new mongoose.Schema({
 const Trade = mongoose.models.Trade || mongoose.model('Trade', tradeSchema);
 
 export default async function handler(req, res) {
-    // SECURITY: Mencegah eksekusi sembarangan (Opsional: Hardcode PIN rahasia)
+    // KUNCI RAHASIA SEMENTARA: "RAHASIA123"
     const { secret, targetAccount } = req.query;
-    
-    // Ganti "RAHASIA123" dengan password sementara pilihan Anda
+
     if (secret !== "RAHASIA123") {
-        return res.status(401).json({ error: "Unauthorized: Salah Secret Key" });
+        return res.status(401).json({ error: "Dilarang masuk! Salah kunci." });
     }
 
     if (!targetAccount) {
-        return res.status(400).json({ error: "Mohon masukkan targetAccount di URL (contoh: ?targetAccount=123456)" });
+        return res.status(400).json({ error: "Target akun belum dimasukkan." });
     }
 
     await connectToDB();
 
     if (req.method === 'GET') {
         try {
-            let filter = {};
-            
-            if (targetAccount === 'NULL') {
-                // Hapus data yang tidak punya Account ID (seperti JSON yang Anda kirim)
-                filter = { 
-                    $or: [
-                        { accountId: { $exists: false } },
-                        { accountId: null },
-                        { accountId: "" },
-                        { accountId: "undefined" }
-                    ]
-                };
-            } else {
-                // Hapus akun spesifik
-                filter = { accountId: targetAccount };
-            }
-
-            // EKSEKUSI PENGHAPUSAN
-            const result = await Trade.deleteMany(filter);
+            // Perintah menghapus data permanen
+            const result = await Trade.deleteMany({ accountId: targetAccount });
 
             return res.status(200).json({ 
-                status: "SUCCESS", 
-                message: `Berhasil menghapus data akun: ${targetAccount}`,
-                deletedCount: result.deletedCount
+                status: "BERHASIL DIHAPUS", 
+                akun: targetAccount,
+                jumlah_data_terhapus: result.deletedCount
             });
         } catch (error) {
             return res.status(500).json({ error: error.message });
         }
     }
-    return res.status(405).json({ error: "Method not allowed" });
 }
