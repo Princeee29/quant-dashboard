@@ -14,11 +14,9 @@ const connectToDB = async () => {
     }
 };
 
-// Update Schema: Menambahkan field accountId
-// Menghapus 'unique: true' pada id agar tiket yang sama bisa ada di akun berbeda
 const tradeSchema = new mongoose.Schema({
     id: { type: String, required: true },
-    accountId: { type: String, required: true }, // Field baru wajib diisi
+    accountId: { type: String, required: true },
     openDate: String,
     symbol: String,
     side: String,
@@ -29,36 +27,55 @@ const tradeSchema = new mongoose.Schema({
     status: String
 });
 
-// Optional: Compound index agar satu akun tidak bisa punya tiket duplikat
-// tradeSchema.index({ id: 1, accountId: 1 }, { unique: true });
+// Index agar pencarian dan update data super cepat
+tradeSchema.index({ id: 1, accountId: 1 }, { unique: true });
 
 const Trade = mongoose.models.Trade || mongoose.model('Trade', tradeSchema);
 
 export default async function handler(req, res) {
+    // Header agar Dashboard (React) bisa akses data
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, x-api-key');
+
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     await connectToDB();
 
+    // --- LOGIKA MENYIMPAN DATA (DARI MT5) ---
     if (req.method === 'POST') {
-        const newData = req.body;
-
-        // Validasi: Pastikan accountId dikirim oleh Bot/EA
-        if (!newData.accountId) {
-            return res.status(400).json({ error: "accountId is required" });
+        // 1. Cek Kunci Rahasia (API KEY)
+        // Jika kunci yang dikirim EA tidak sama dengan yang di server, tolak!
+        const apiKey = req.headers['x-api-key'];
+        if (apiKey !== process.env.API_KEY_SECRET) {
+            return res.status(401).json({ error: "DILARANG: Kunci Rahasia Salah!" });
         }
 
-        // Simpan atau Update berdasarkan ID dan AccountID
+        const newData = req.body;
+        if (!newData.accountId) {
+            return res.status(400).json({ error: "Wajib ada Account ID" });
+        }
+
+        // 2. Simpan atau Update (Upsert)
         await Trade.findOneAndUpdate(
             { id: String(newData.id), accountId: String(newData.accountId) },
             newData,
             { upsert: true, new: true }
         );
-        return res.status(200).json({ message: "Saved" });
+        return res.status(200).json({ message: "Data Tersimpan" });
     }
     
+    // --- LOGIKA MENGAMBIL DATA (UNTUK DASHBOARD) ---
+    if (req.method === 'GET') {
+         const { accountId } = req.query;
+         let query = {};
+         if (accountId) query = { accountId: String(accountId) };
+         
+         // Ambil 1000 trade terakhir (biar ringan)
+         const trades = await Trade.find(query).sort({ openDate: -1 }).limit(1000); 
+         return res.status(200).json(trades);
+    }
+
     return res.status(405).json({ error: "Method not allowed" });
 }

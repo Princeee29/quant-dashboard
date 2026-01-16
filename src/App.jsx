@@ -37,6 +37,18 @@ const downloadCSV = (data) => {
     document.body.removeChild(link);
 };
 
+// --- AUDIO UTILITY (NEW) ---
+// Menggunakan URL suara publik agar Anda tidak perlu download file manual.
+// Suara: "Coin Win / Success" effect.
+const playWinSound = () => {
+    try {
+        const audio = new Audio("https://cdn.pixabay.com/audio/2021/08/04/audio_0625c1539c.mp3"); 
+        audio.volume = 0.5;
+        // Browser modern butuh interaksi user minimal 1x sebelum autoplay jalan
+        audio.play().catch(e => console.log("Audio play blocked (user interaction needed):", e));
+    } catch (e) { console.error("Audio Error:", e); }
+};
+
 // --- KOMPONEN UI LAMA (KEPT) ---
 
 const StatusBadge = ({ status }) => {
@@ -183,6 +195,10 @@ export default function TradingDashboard() {
   const [itemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState({ key: 'openDate', direction: 'desc' });
 
+  // STATE BARU: Untuk indikator Pulse & Timestamp
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [isSystemOnline, setIsSystemOnline] = useState(true);
+
   // 1. STATS LAMA (Untuk Grid Kartu Lama)
   const [stats, setStats] = useState({
     netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0,
@@ -225,8 +241,28 @@ export default function TradingDashboard() {
       if (selectedAccount !== 'ALL') {
           cleanData = cleanData.filter(t => String(t.accountId) === String(selectedAccount));
       }
+
+      // --- LOGIKA AUDIO ALERT BARU ---
+      // Jika data baru lebih banyak dari data lama (ada trade baru)
+      // DAN trade terbaru statusnya 'Win'
+      if (cleanData.length > trades.length && trades.length > 0) {
+        // Asumsi data terbaru ada di index 0 atau kita cari tiket yg baru
+        const newTrade = cleanData.find(t => !trades.find(old => old.id === t.id));
+        if (newTrade && newTrade.status === 'Win') {
+            playWinSound();
+        }
+      }
+
       setTrades(cleanData);
-    } catch (error) { console.error(error); }
+      
+      // Update System Status
+      setLastUpdated(new Date());
+      setIsSystemOnline(true);
+
+    } catch (error) { 
+        console.error(error); 
+        setIsSystemOnline(false); // Set merah jika error
+    }
   };
 
   useEffect(() => {
@@ -367,6 +403,7 @@ export default function TradingDashboard() {
         </div>
         
         <div className="flex gap-2 items-center">
+            {/* Account Selector */}
             <div className="relative group bg-[#111] rounded-lg border border-[#222] flex items-center px-3 py-2 gap-2">
                  <Users size={14} className="text-gray-500"/>
                  <select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)} className="bg-transparent text-xs font-bold text-gray-300 focus:outline-none appearance-none cursor-pointer min-w-[120px]">
@@ -375,8 +412,24 @@ export default function TradingDashboard() {
                 </select>
                 <div className="pointer-events-none text-gray-500 text-[10px]">▼</div>
             </div>
+            
             <button onClick={() => downloadCSV(trades)} className="bg-[#111] hover:bg-[#222] px-4 py-2 rounded-lg border border-[#222] flex items-center gap-2 transition-all text-xs font-bold text-gray-400 hover:text-white"><Download size={14} /> EXPORT</button>
-            <div className="bg-[#111] px-4 py-2 rounded-lg border border-[#222] flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div><span className="text-[10px] uppercase font-bold text-gray-400">Online</span></div>
+            
+            {/* NEW: PULSE INDICATOR & TIMESTAMP */}
+            <div className={`bg-[#111] px-4 py-1.5 rounded-lg border flex flex-col items-end min-w-[120px] transition-all duration-500 ${isSystemOnline ? 'border-[#222]' : 'border-red-900/50 bg-red-900/10'}`}>
+                <div className="flex items-center gap-2">
+                    <div className="relative flex h-2 w-2">
+                         {isSystemOnline && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>}
+                         <span className={`relative inline-flex rounded-full h-2 w-2 ${isSystemOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                    </div>
+                    <span className={`text-[10px] uppercase font-bold tracking-wider ${isSystemOnline ? 'text-gray-300' : 'text-red-400'}`}>
+                        {isSystemOnline ? 'Online' : 'Offline'}
+                    </span>
+                </div>
+                <span className="text-[8px] text-gray-600 font-mono mt-0.5">
+                    {lastUpdated.toLocaleTimeString()}
+                </span>
+            </div>
         </div>
       </div>
 
