@@ -3,19 +3,17 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// --- KONEKSI DB (Cached) ---
 let isConnected = false;
 const connectToDB = async () => {
     if (isConnected) return;
-    if (mongoose.connection.readyState >= 1) {
+    try {
+        await mongoose.connect(process.env.MONGO_URI);
         isConnected = true;
-        return;
+    } catch (error) {
+        console.error("DB Error", error);
     }
-    await mongoose.connect(process.env.MONGO_URI);
-    isConnected = true;
 };
 
-// --- SCHEMA ---
 const tradeSchema = new mongoose.Schema({
     id: { type: String, required: true, unique: true },
     openDate: String,
@@ -27,25 +25,20 @@ const tradeSchema = new mongoose.Schema({
     pnl: Number,
     status: String
 });
-// Gunakan model yang sudah ada atau buat baru
+
 const Trade = mongoose.models.Trade || mongoose.model('Trade', tradeSchema);
 
-// --- HANDLER UTAMA ---
 export default async function handler(req, res) {
-    // Enable CORS
+    // CORS Headers (Agar bisa diakses dari mana saja)
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     
+    await connectToDB();
+    
     if (req.method === 'GET') {
-        try {
-            await connectToDB();
-            // Ambil data, urutkan dari yang terbaru
-            const trades = await Trade.find().sort({ _id: -1 });
-            return res.status(200).json(trades);
-        } catch (error) {
-            return res.status(500).json({ error: "Gagal ambil data DB" });
-        }
+        const trades = await Trade.find().sort({ _id: -1 });
+        return res.status(200).json(trades);
     }
     
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(200).json([]); 
 }

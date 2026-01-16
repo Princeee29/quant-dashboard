@@ -9,11 +9,9 @@ import {
 } from 'recharts';
 
 // --- API CONFIG ---
-// Jika sedang di Vercel (Production), pakai jalur relatif '/api/trades'
-// Jika sedang di Laptop (Development), pakai localhost
-const API_URL = import.meta.env.PROD 
-  ? '/api/trades' 
-  : 'http://localhost:3000/api/trades';
+// Ganti baris API_URL dengan link Vercel Anda yang lengkap + /api/trades
+// Contoh (Sesuaikan dengan link Anda!):
+const API_URL = 'https://quant-dashboard-45vdwr8q7-prince77s-projects.vercel.app/api/trades';
 
 // --- HELPER FUNCTIONS ---
 const formatDuration = (ms) => {
