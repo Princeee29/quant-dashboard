@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   HelpCircle, TrendingUp, TrendingDown, Activity, 
   Clock, BarChart2, Search, ChevronLeft, ChevronRight, Download, PieChart as PieIcon,
-  Users, Calendar, Layers, DollarSign, Trash2, Zap, Radio, AlertTriangle
+  Users, Calendar, Layers, DollarSign, Trash2, Zap, Radio, AlertTriangle, Hash
 } from 'lucide-react';
 import { 
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
@@ -36,9 +36,18 @@ const formatCurrency = (value, currencyCode = 'USD') => {
 
 const formatNumber = (value) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(value);
 
+const formatPrice = (value) => {
+    if (value === undefined || value === null || value === '') return "0.00";
+    const num = parseFloat(value);
+    if (isNaN(num)) return "0.00";
+    return num > 500 
+        ? new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num) 
+        : new Intl.NumberFormat('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 }).format(num);
+};
+
 const downloadCSV = (data) => {
-    const headers = ["Ticket", "Account", "Currency", "Open Date", "Symbol", "Side", "Entry", "Exit", "Qty", "PnL", "Status"];
-    const rows = data.map(t => [t.id, t.accountId || 'N/A', t.currency || 'USD', t.openDate, t.symbol, t.side, t.entry, t.exit, t.qty, t.pnl, t.status]);
+    const headers = ["Ticket", "Account", "Currency", "Open Date", "Symbol", "Side", "Entry", "Exit", "Qty", "PnL", "Swap", "Status"];
+    const rows = data.map(t => [t.id, t.accountId || 'N/A', t.currency || 'USD', t.openDate, t.symbol, t.side, t.entry, t.exit, t.qty, t.pnl, t.swap || 0, t.status]);
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -57,7 +66,45 @@ const playWinSound = () => {
     } catch (e) { console.error("Audio Error:", e); }
 };
 
-// --- KOMPONEN UI ---
+// --- MARKET WATCH TICKER (PERCENT CHANGE) ---
+const MarketTicker = ({ marketWatch }) => {
+  // Gandakan data agar penuh satu layar (looping illusion)
+  const tickerItems = useMemo(() => {
+      if (!marketWatch || marketWatch.length === 0) return [];
+      // Jika data sedikit, duplikasi 20x. Jika banyak, 5x cukup.
+      const multiplier = marketWatch.length < 5 ? 20 : 5;
+      return Array(multiplier).fill(marketWatch).flat(); 
+  }, [marketWatch]);
+
+  if (tickerItems.length === 0) return (
+      <div className="w-full bg-[#050505] border-b border-white/5 py-2.5 text-center text-[10px] text-gray-600 font-mono animate-pulse">
+          SYNCING MARKET DATA...
+      </div>
+  );
+
+  return (
+    <div className="w-full bg-[#050505] border-b border-white/5 overflow-hidden py-2.5 relative z-40 shadow-lg">
+       <div className="animate-ticker flex items-center">
+          {tickerItems.map((item, idx) => (
+             <div key={`${item.symbol}-${idx}`} className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider whitespace-nowrap px-6">
+                <span className="font-bold text-white text-xs">{item.symbol}</span>
+                
+                {/* Format: Persentase (Change %) */}
+                <span className={`flex items-center font-bold ${item.change >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]'}`}>
+                   {item.change >= 0 ? '▲' : '▼'} {Math.abs(item.change).toFixed(2)}%
+                </span>
+                
+                {/* Separator */}
+                <span className="text-gray-800 opacity-30">/</span>
+             </div>
+          ))}
+       </div>
+       
+       <div className="absolute top-0 left-0 w-32 h-full bg-gradient-to-r from-[#030508] to-transparent pointer-events-none"></div>
+       <div className="absolute top-0 right-0 w-32 h-full bg-gradient-to-l from-[#030508] to-transparent pointer-events-none"></div>
+    </div>
+  );
+};
 
 const StatusBadge = ({ status }) => {
   const normalizedStatus = status ? status.toLowerCase() : '';
@@ -87,7 +134,6 @@ const StatusBadge = ({ status }) => {
 const StatCard = ({ label, value, prefix = null, icon: Icon, subValue = null, className = "" }) => (
   <div className={`group relative bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl p-5 overflow-hidden hover:border-white/10 transition-all duration-300 ${className}`}>
     <div className="absolute -inset-1 bg-gradient-to-r from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-500"></div>
-    
     <div className="relative z-10 flex flex-col justify-between h-full min-h-[90px]">
         <div className="flex items-center justify-between mb-2">
           <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 font-mono truncate">
@@ -96,7 +142,6 @@ const StatCard = ({ label, value, prefix = null, icon: Icon, subValue = null, cl
           </span>
           <div className="w-1 h-1 rounded-full bg-gray-700 group-hover:bg-blue-400 transition-colors"></div>
         </div>
-        
         <div className="flex flex-col">
             <div className="text-2xl lg:text-3xl font-bold text-gray-100 tracking-tight font-mono tabular-nums truncate">
                 <span className="text-gray-500 text-lg mr-1">{prefix}</span>{value}
@@ -135,7 +180,7 @@ const SimpleBarChart = ({ data, xKey, yKey, color, currency }) => (
       <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
       <XAxis dataKey={xKey} stroke="#525252" tick={{fontSize: 9, fontFamily: 'monospace'}} tickLine={false} axisLine={false} />
       <YAxis stroke="#525252" tick={{fontSize: 9, fontFamily: 'monospace'}} tickLine={false} axisLine={false} />
-      <Tooltip cursor={{fill: '#ffffff05'}} contentStyle={{ backgroundColor: '#090c10', borderColor: '#333', fontSize: '11px', borderRadius: '8px', fontFamily: 'monospace' }} formatter={(val) => [formatCurrency(val, currency), 'PnL']} />
+      <Tooltip cursor={{fill: '#ffffff05'}} contentStyle={{ backgroundColor: '#090c10', borderColor: '#333', borderRadius: '8px', fontSize: '12px', fontFamily: 'monospace' }} formatter={(val) => [formatCurrency(val, currency), 'PnL']} />
       <Bar dataKey={yKey} fill={color} radius={[2, 2, 0, 0]}>
          {data.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry[yKey] >= 0 ? color : '#ff1744'} />))}
       </Bar>
@@ -148,16 +193,19 @@ const AdvancedChart = ({ data, currency, initialBalance }) => {
   if (!data || data.length === 0) return <div className="h-full flex flex-col items-center justify-center gap-3 text-gray-700"><Activity className="animate-pulse" size={40}/><span className="text-xs font-mono uppercase tracking-widest">Waiting for Data Stream...</span></div>;
   
   const reversedData = [...data].reverse();
-  
-  // LOGIC: Chart Equity dimulai dari Saldo Awal yang didapat dari API
   let currentBalance = initialBalance;
   
   const equityData = reversedData.map((t, index) => { 
-      currentBalance += parseFloat(t.pnl); 
-      return { name: index + 1, balance: currentBalance, pnl: parseFloat(t.pnl), date: t.openDate }; 
+      const tradePnL = parseFloat(t.pnl) + parseFloat(t.swap || 0);
+      currentBalance += tradePnL; 
+      return { name: index + 1, balance: currentBalance, pnl: tradePnL, date: t.openDate }; 
   });
   
-  const dailyDataMap = {}; reversedData.forEach(t => { const dateKey = t.openDate.split(' ')[0]; if (!dailyDataMap[dateKey]) dailyDataMap[dateKey] = 0; dailyDataMap[dateKey] += parseFloat(t.pnl); });
+  const dailyDataMap = {}; reversedData.forEach(t => { 
+      const dateKey = t.openDate.split(' ')[0]; 
+      if (!dailyDataMap[dateKey]) dailyDataMap[dateKey] = 0; 
+      dailyDataMap[dateKey] += (parseFloat(t.pnl) + parseFloat(t.swap || 0)); 
+  });
   const dailyData = Object.keys(dailyDataMap).map(date => ({ date, pnl: dailyDataMap[date] }));
 
   return (
@@ -237,8 +285,7 @@ const WinRateGauge = ({ percentage }) => {
   const strokeWidth = 28; 
   const arcLength = Math.PI * radius; 
   const strokeDashoffset = arcLength * (1 - percentage / 100);
-  const cx = 160; 
-  const cy = 160; 
+  const cx = 160; const cy = 160; 
 
   const totalDots = 9; 
   const dots = Array.from({ length: totalDots }).map((_, i) => { 
@@ -282,22 +329,20 @@ const WinRateGauge = ({ percentage }) => {
 
 export default function TradingDashboard() {
   const [trades, setTrades] = useState([]);
-  
   const [selectedAccount, setSelectedAccount] = useState('');
   const [availableAccounts, setAvailableAccounts] = useState([]);
-  
   const [filter, setFilter] = useState('Both');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState({ key: 'openDate', direction: 'desc' });
-
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [isSystemOnline, setIsSystemOnline] = useState(true);
   const [latency, setLatency] = useState(0);
-
-  // BARU: State untuk menyimpan Info Akun Real (Saldo, Equity)
   const [realAccountInfo, setRealAccountInfo] = useState(null);
+  
+  // STATE BARU: Untuk menyimpan data Market Watch Ticker
+  const [marketWatchData, setMarketWatchData] = useState([]);
 
   const [stats, setStats] = useState({
     netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0,
@@ -310,16 +355,14 @@ export default function TradingDashboard() {
   });
 
   const [charts, setCharts] = useState({
-    weekday: [], hourly: [], symbolPerf: []
+    weekday: [], hourly: [], symbolPerf: [], initialBalance: 100000
   });
 
-  // --- FUNCTION: FETCH INFO AKUN (REAL BALANCE) ---
   const fetchAccountInfo = async () => {
     if (!selectedAccount) return;
     try {
         const res = await fetch(`${API_BASE}/api/account-info?accountId=${selectedAccount}`);
         const data = await res.json();
-        // Jika data valid, simpan ke state
         if (data && data.balance !== undefined) {
             setRealAccountInfo(data);
         }
@@ -328,21 +371,31 @@ export default function TradingDashboard() {
     }
   };
 
+  // FUNCTION BARU: FETCH MARKET WATCH
+  const fetchMarketWatch = async () => {
+    if (!selectedAccount) return;
+    try {
+        const res = await fetch(`${API_BASE}/api/market-watch?accountId=${selectedAccount}`);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+            setMarketWatchData(data);
+        }
+    } catch (e) {
+        console.error("Failed to fetch market watch", e);
+    }
+  };
+
   const fetchTrades = async () => {
     const startTime = Date.now();
     try {
-      const url = (!selectedAccount) 
-        ? API_URL 
-        : `${API_URL}?accountId=${selectedAccount}`;
-        
+      const url = (!selectedAccount) ? API_URL : `${API_URL}?accountId=${selectedAccount}`;
       const response = await fetch(url);
       const data = await response.json();
-      
       const endTime = Date.now();
       setLatency(endTime - startTime);
 
-      // PANGGIL INI JUGA
       await fetchAccountInfo();
+      await fetchMarketWatch(); // <--- Panggil fungsi baru ini
 
       const tradeMap = new Map();
       data.forEach(trade => {
@@ -352,40 +405,28 @@ export default function TradingDashboard() {
               const existingHasAccount = existing.accountId && existing.accountId !== 'undefined';
               const newHasAccount = trade.accountId && trade.accountId !== 'undefined';
               if (!existingHasAccount && newHasAccount) { tradeMap.set(id, trade); return; }
-              // eslint-disable-next-line
               if (existing.status === 'Open' && trade.status !== 'Open') { tradeMap.set(id, trade); }
           }
       });
       let cleanData = Array.from(tradeMap.values());
       
       if(cleanData.length > 0) {
-          const incomingAccounts = cleanData
-            .map(d => d.accountId)
-            .filter(acc => acc && acc !== 'undefined' && acc !== 'null');
-          
+          const incomingAccounts = cleanData.map(d => d.accountId).filter(acc => acc && acc !== 'undefined' && acc !== 'null');
           const uniqueAccounts = Array.from(new Set(incomingAccounts)).sort();
           setAvailableAccounts(uniqueAccounts);
-
-          if (!selectedAccount && uniqueAccounts.length > 0) {
-             setSelectedAccount(uniqueAccounts[0]);
-          }
+          if (!selectedAccount && uniqueAccounts.length > 0) setSelectedAccount(uniqueAccounts[0]);
       }
 
-      if (selectedAccount) {
-          cleanData = cleanData.filter(t => String(t.accountId) === String(selectedAccount));
-      }
+      if (selectedAccount) cleanData = cleanData.filter(t => String(t.accountId) === String(selectedAccount));
 
       if (cleanData.length > trades.length && trades.length > 0) {
         const newTrade = cleanData.find(t => !trades.find(old => old.id === t.id));
-        if (newTrade && newTrade.status === 'Win') {
-            playWinSound();
-        }
+        if (newTrade && newTrade.status === 'Win') playWinSound();
       }
 
       setTrades(cleanData);
       setLastUpdated(new Date());
       setIsSystemOnline(true);
-
     } catch (error) { 
         console.error(error); 
         setIsSystemOnline(false); 
@@ -409,16 +450,14 @@ export default function TradingDashboard() {
     if (trades.length === 0) {
         setStats({ netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0, profitFactor: 0, totalTrades: 0, bestProfit: 0, biggestLoss: 0, expectancy: 0, avgTradeSize: 0, avgDuration: "0h:00m:00s" });
         setExtraMetrics({ equity: 0, balance: 0, dailyDD: 0, maxDD: 0, tradingDays: 0, floatingPnL: 0 });
-        setCharts({ weekday: [], hourly: [], symbolPerf: [] });
+        setCharts({ weekday: [], hourly: [], symbolPerf: [], initialBalance: 100000 });
         return;
     }
     
     let net = 0, grossP = 0, grossL = 0, wins = 0; let best = 0, worst = 0;
     let totalQty = 0; let totalDurationMs = 0; let closedTradesCount = 0;
-    
     let floating = 0;
     
-    // --- HITUNG TRADING STATS ---
     const uniqueDays = new Set();
     const weekdayPnl = [0,0,0,0,0,0,0]; 
     const hourlyPnl = Array(24).fill(0);
@@ -427,35 +466,40 @@ export default function TradingDashboard() {
     const sortedForDD = [...trades].sort((a,b) => a.openDate.localeCompare(b.openDate));
 
     sortedForDD.forEach(t => {
-      const pnl = parseFloat(t.pnl); const qty = parseFloat(t.qty || 0);
+      const rawPnL = parseFloat(t.pnl);
+      const swap = parseFloat(t.swap || 0);
+      const totalRealPnL = rawPnL + swap; 
+      
+      const qty = parseFloat(t.qty || 0);
       const statusLower = t.status ? t.status.toLowerCase() : '';
 
       if (statusLower === 'open') {
-          floating += pnl;
+          floating += totalRealPnL;
       } else {
-          net += pnl;
+          net += totalRealPnL;
           totalQty += qty;
           closedTradesCount++;
           totalDurationMs += (qty * 1000 * 60 * 30); 
           
-          if (pnl >= 0) { grossP += pnl; wins++; if (pnl > best) best = pnl; } 
-          else { grossL += Math.abs(pnl); if (pnl < worst) worst = pnl; }
+          if (totalRealPnL >= 0) { grossP += totalRealPnL; wins++; if (totalRealPnL > best) best = totalRealPnL; } 
+          else { grossL += Math.abs(totalRealPnL); if (totalRealPnL < worst) worst = totalRealPnL; }
 
           uniqueDays.add(t.openDate.split(' ')[0]);
 
           const d = new Date(t.openDate.replace(/\./g, '-'));
           if(!isNaN(d)) {
-              weekdayPnl[d.getDay()] += pnl;
-              hourlyPnl[d.getHours()] += pnl;
+              weekdayPnl[d.getDay()] += totalRealPnL;
+              hourlyPnl[d.getHours()] += totalRealPnL;
           }
       }
 
       if(!symbolStats[t.symbol]) symbolStats[t.symbol] = { vol:0, trades:0, wins:0, losses:0, pnl:0 };
       symbolStats[t.symbol].vol += qty;
       symbolStats[t.symbol].trades += 1;
-      symbolStats[t.symbol].pnl += pnl;
+      symbolStats[t.symbol].pnl += totalRealPnL;
+      
       if(statusLower !== 'open') {
-         if(pnl >= 0) symbolStats[t.symbol].wins++; else symbolStats[t.symbol].losses++;
+         if(totalRealPnL >= 0) symbolStats[t.symbol].wins++; else symbolStats[t.symbol].losses++;
       }
     });
     
@@ -469,19 +513,15 @@ export default function TradingDashboard() {
       avgTradeSize: closedTradesCount > 0 ? (totalQty / closedTradesCount).toFixed(2) : 0, avgDuration: closedTradesCount > 0 ? formatDuration(totalDurationMs / closedTradesCount) : "0h:00m:00s"
     });
 
-    // --- LOGIKA UTAMA DISPLAY SALDO ---
     let displayBalance = 0;
     let displayEquity = 0;
     let initialBalanceForChart = 0;
 
     if (realAccountInfo) {
-        // Jika ada data REAL dari MT5, gunakan itu
         displayBalance = realAccountInfo.balance;
         displayEquity = realAccountInfo.equity;
-        // Estimasi Saldo Awal untuk Chart Equity = Balance Akhir - Total Net Profit
         initialBalanceForChart = displayBalance - net;
     } else {
-        // Fallback jika belum ada koneksi
         const FALLBACK = 100000;
         displayBalance = FALLBACK + net;
         displayEquity = displayBalance + floating;
@@ -497,16 +537,15 @@ export default function TradingDashboard() {
         floatingPnL: floating 
     });
 
-    // Kirim initialBalanceForChart ke Chart agar grafik Equity dimulai dari angka yang benar
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     setCharts({
         weekday: weekdayPnl.map((v, i) => ({ day: days[i], val: v })),
         hourly: hourlyPnl.map((v, i) => ({ hour: i.toString().padStart(2,'0'), val: v })),
         symbolPerf: Object.entries(symbolStats).map(([key, val]) => ({ symbol: key, ...val })).sort((a,b) => b.pnl - a.pnl),
-        initialBalance: initialBalanceForChart // Simpan ini untuk dipakai di AdvancedChart
+        initialBalance: initialBalanceForChart
     });
 
-  }, [trades, realAccountInfo]); // Tambahkan realAccountInfo ke dependency
+  }, [trades, realAccountInfo]);
 
   const sortedAndFilteredTrades = useMemo(() => {
     let data = [...trades];
@@ -523,7 +562,7 @@ export default function TradingDashboard() {
     if (sortConfig.key) {
       data.sort((a, b) => {
         let aVal = a[sortConfig.key]; let bVal = b[sortConfig.key];
-        if (['entry', 'exit', 'qty', 'pnl'].includes(sortConfig.key)) { aVal = parseFloat(aVal); bVal = parseFloat(bVal); }
+        if (['entry', 'exit', 'qty', 'pnl', 'swap'].includes(sortConfig.key)) { aVal = parseFloat(aVal); bVal = parseFloat(bVal); }
         if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
         if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
@@ -566,21 +605,26 @@ export default function TradingDashboard() {
   return (
     <div className="min-h-screen p-4 md:p-8 font-sans text-gray-200 relative overflow-x-hidden selection:bg-[#00e676]/30">
       
-      {/* ATMOSPHERIC BACKGROUND */}
+      {/* VISUAL EFFECTS: VIGNETTE & SCANLINE */}
+      <div className="vignette z-50"></div>
       <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-[-1]">
+          <div className="scanline"></div>
           <div className="absolute top-[-10%] left-[20%] w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px]"></div>
           <div className="absolute bottom-[-10%] right-[10%] w-[400px] h-[400px] bg-[#00e676]/5 rounded-full blur-[100px]"></div>
       </div>
 
-      {/* HEADER SECTION */}
-      <div className="max-w-[1800px] mx-auto mb-10">
+      {/* HEADER: RUNNING TICKER (MENGGUNAKAN DATA MARKET WATCH) */}
+      <MarketTicker marketWatch={marketWatchData} />
+
+      {/* HEADER MAIN */}
+      <div className="max-w-[1800px] mx-auto mb-10 mt-6 relative z-10">
         <div className="flex flex-col md:flex-row justify-between items-end gap-6 pb-6 border-b border-white/5">
             <div>
                 <div className="flex items-center gap-3 mb-2">
                     <div className="bg-[#00e676]/10 p-2 rounded-lg border border-[#00e676]/20 shadow-[0_0_15px_rgba(0,230,118,0.2)]">
                         <Zap size={20} className="text-[#00e676] fill-[#00e676]" />
                     </div>
-                    <h1 className="text-4xl font-extrabold tracking-tight text-white">HELIX<span className="text-gray-600">CORE</span></h1>
+                    <h1 className="text-4xl font-extrabold tracking-tight text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">HELIX<span className="text-gray-600">CORE</span></h1>
                 </div>
                 <div className="flex items-center gap-4 text-xs font-mono text-gray-500 uppercase tracking-wider">
                     <span className="flex items-center gap-2">
@@ -603,36 +647,17 @@ export default function TradingDashboard() {
                         {availableAccounts.map(acc => ( <option key={acc} value={acc}>ACCOUNT {acc}</option> ))}
                     </select>
                 </div>
-
-                {selectedAccount && (
-                    <button 
-                        onClick={handleDeleteAccount}
-                        className="p-3 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all"
-                        title="Delete Account Data"
-                    >
-                        <Trash2 size={16}/>
-                    </button>
-                )}
-                
-                <button onClick={() => downloadCSV(trades)} className="flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 px-5 py-2.5 rounded-lg text-xs font-bold tracking-wider transition-all">
-                    <Download size={16}/> CSV
-                </button>
+                {selectedAccount && (<button onClick={handleDeleteAccount} className="p-3 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all"><Trash2 size={16}/></button>)}
+                <button onClick={() => downloadCSV(trades)} className="flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 px-5 py-2.5 rounded-lg text-xs font-bold tracking-wider transition-all"><Download size={16}/> CSV</button>
             </div>
         </div>
       </div>
 
-      <div className="max-w-[1800px] mx-auto space-y-8">
+      <div className="max-w-[1800px] mx-auto space-y-8 relative z-10">
         
         {/* FINANCIAL OVERVIEW GRID */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <OverviewCard 
-            title="Equity" 
-            value={fmtCurr(extraMetrics.equity)} 
-            isNegative={false} 
-            icon={DollarSign} 
-            subValue={`${extraMetrics.floatingPnL >= 0 ? '+' : ''}${fmtCurr(extraMetrics.floatingPnL)} FLT`} 
-            isAlert={isHighRisk} 
-          />
+          <OverviewCard title="Equity" value={fmtCurr(extraMetrics.equity)} isNegative={false} icon={DollarSign} subValue={`${extraMetrics.floatingPnL >= 0 ? '+' : ''}${fmtCurr(extraMetrics.floatingPnL)} FLT`} isAlert={isHighRisk} />
           <OverviewCard title="Balance" value={fmtCurr(extraMetrics.balance)} icon={Layers} />
           <OverviewCard title="Net PnL" value={fmtCurr(stats.netProfit)} isNegative={stats.netProfit < 0} icon={TrendingUp} />
           <OverviewCard title="Daily DD" value={`-${fmtCurr(extraMetrics.dailyDD)}`} isNegative={true} icon={TrendingDown} />
@@ -640,12 +665,11 @@ export default function TradingDashboard() {
           <OverviewCard title="Active Days" value={extraMetrics.tradingDays} icon={Calendar} />
         </div>
 
-        {/* CHARTS & STATS SECTION */}
+        {/* CHARTS & STATS */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
             <div className="xl:col-span-8 bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl p-6 h-[420px] shadow-lg">
                 <AdvancedChart data={trades} currency={activeCurrency} initialBalance={charts.initialBalance || 100000} />
             </div>
-            
             <div className="xl:col-span-4 flex flex-col gap-4 h-full min-h-[420px]">
                 <div className="flex-1 min-h-[180px] bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl overflow-hidden relative">
                     <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
@@ -675,16 +699,15 @@ export default function TradingDashboard() {
         </div>
 
         {/* TRADE JOURNAL TERMINAL */}
-        <div className="bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
+        <div className="bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl overflow-hidden shadow-2xl mb-10">
              <div className="p-6 border-b border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-4">
-                    <div className="bg-blue-500/10 p-2 rounded text-blue-400"><Activity size={18}/></div>
+                    <div className="bg-blue-500/10 p-2 rounded text-blue-400"><Hash size={18}/></div>
                     <div>
                         <h2 className="text-lg font-bold text-white tracking-tight">Trade Journal</h2>
-                        <div className="text-[10px] text-gray-500 font-mono mt-0.5">LATEST EXECUTION LOGS</div>
+                        <div className="text-[10px] text-gray-500 font-mono mt-0.5">LIVE EXECUTION FEED</div>
                     </div>
                 </div>
-                
                 <div className="flex flex-wrap items-center gap-3">
                      <div className="relative group">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 group-hover:text-blue-400 transition-colors" size={14} />
@@ -702,7 +725,7 @@ export default function TradingDashboard() {
                 <table className="w-full text-left border-collapse">
                    <thead className="bg-black/20 text-gray-500 text-[10px] uppercase tracking-widest font-mono">
                       <tr>
-                        {[{ key: 'id', label: 'Ticket' }, { key: 'accountId', label: 'Account' }, { key: 'openDate', label: 'Date' }, { key: 'symbol', label: 'Symbol' }, { key: 'side', label: 'Side' }, { key: 'entry', label: 'Entry' }, { key: 'exit', label: 'Exit' }, { key: 'qty', label: 'Size' }, { key: 'pnl', label: 'Net PnL' }, { key: 'status', label: 'State' }].map((col) => (
+                        {[{ key: 'id', label: 'Ticket' }, { key: 'accountId', label: 'Account' }, { key: 'openDate', label: 'Date' }, { key: 'symbol', label: 'Symbol' }, { key: 'side', label: 'Side' }, { key: 'entry', label: 'Entry' }, { key: 'exit', label: 'Exit' }, { key: 'qty', label: 'Size' }, { key: 'pnl', label: 'Net PnL' }, { key: 'swap', label: 'Swap' }, { key: 'status', label: 'State' }].map((col) => (
                             <th key={col.key} onClick={() => requestSort(col.key)} className="py-4 px-4 font-bold border-b border-white/5 hover:text-white cursor-pointer transition-colors select-none group">
                                 <div className="flex items-center gap-1">{col.label} {sortConfig.key === col.key && (<span className="text-blue-500">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>)}</div>
                             </th>
@@ -717,29 +740,21 @@ export default function TradingDashboard() {
                            <td className="py-4 px-4 text-gray-500">{trade.openDate}</td>
                            <td className="py-4 px-4 font-bold text-gray-200">{trade.symbol}</td>
                            <td className="py-4 px-4"><span className={`font-bold ${trade.side === 'Buy' ? 'text-[#00e676]' : 'text-[#ff1744]'}`}>{trade.side.toUpperCase()}</span></td>
-                           <td className="py-4 px-4 text-gray-400">{parseFloat(trade.entry).toFixed(5)}</td>
-                           <td className="py-4 px-4 text-gray-400">{parseFloat(trade.exit).toFixed(5)}</td>
+                           {/* Format Price Helper */}
+                           <td className="py-4 px-4 text-gray-400">{formatPrice(trade.entry)}</td>
+                           <td className="py-4 px-4 text-gray-400">{formatPrice(trade.exit)}</td>
                            <td className="py-4 px-4 text-gray-300">{parseFloat(trade.qty).toFixed(2)}</td>
                            <td className={`py-4 px-4 font-bold text-[13px] ${parseFloat(trade.pnl) >= 0 ? 'text-[#00e676] drop-shadow-[0_0_8px_rgba(0,230,118,0.3)]' : 'text-[#ff1744]'}`}>{fmtCurr(trade.pnl)}</td>
+                           <td className="py-4 px-4 text-gray-500">{fmtCurr(trade.swap || 0)}</td>
                            <td className="py-4 px-4"><StatusBadge status={trade.status} /></td>
                          </tr>
                        )) : (
-                         <tr><td colSpan="10" className="py-12 text-center text-gray-600 text-xs font-mono uppercase tracking-widest flex flex-col items-center gap-2"><AlertTriangle size={24} className="mb-2 opacity-50"/>No matching records found</td></tr>
+                         <tr><td colSpan="11" className="py-12 text-center text-gray-600 text-xs font-mono uppercase tracking-widest flex flex-col items-center gap-2"><AlertTriangle size={24} className="mb-2 opacity-50"/>No matching records found</td></tr>
                        )}
                    </tbody>
                 </table>
              </div>
-
-             <div className="flex justify-between items-center p-4 border-t border-white/5 bg-black/20">
-                  <span className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">Displaying {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, sortedAndFilteredTrades.length)} of {sortedAndFilteredTrades.length}</span>
-                  <div className="flex items-center gap-2">
-                      <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-2 rounded-lg bg-white/5 border border-white/5 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"><ChevronLeft size={14} /></button>
-                      <div className="flex gap-1">{Array.from({length: Math.min(5, totalPages)}, (_, i) => (<button key={i} onClick={() => setCurrentPage(i + 1)} className={`w-8 h-8 rounded-lg text-[10px] font-bold font-mono transition-all ${currentPage === i + 1 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}>{i + 1}</button>))}</div>
-                      <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="p-2 rounded-lg bg-white/5 border border-white/5 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"><ChevronRight size={14} /></button>
-                  </div>
-             </div>
         </div>
-
       </div>
     </div>
   );

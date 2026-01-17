@@ -7,10 +7,12 @@
 
 body {
   @apply bg-background text-gray-300 antialiased;
+  background-color: #030508;
   background-image: 
     linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
   background-size: 40px 40px;
+  overflow-x: hidden; /* Mencegah scroll horizontal akibat animasi */
 }
 
 /* Scrollbar Keren */
@@ -31,4 +33,49 @@ body {
 /* Utility Class untuk Glass Effect */
 .glass-panel {
   @apply bg-surface/80 backdrop-blur-md border border-white/5 shadow-glass;
+}
+
+/* --- EFEK BARU: ANIMASI & ATMOSFER --- */
+
+/* 1. Running Text (Ticker) */
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-ticker {
+  animation: ticker 40s linear infinite;
+  display: flex;
+  width: max-content; /* Pastikan lebar mengikuti konten */
+}
+.animate-ticker:hover {
+  animation-play-state: paused;
+}
+
+/* 2. CRT Scanline (Garis Monitor) */
+.scanline {
+  width: 100%;
+  height: 100px;
+  z-index: 10;
+  background: linear-gradient(0deg, rgba(0,0,0,0) 0%, rgba(0, 230, 118, 0.02) 50%, rgba(0,0,0,0) 100%);
+  opacity: 0.1;
+  position: absolute;
+  bottom: 100%;
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+}
+@keyframes scanline {
+  0% { bottom: 100%; }
+  100% { bottom: -100%; }
+}
+
+/* 3. Vignette (Sudut Gelap Dramatis) */
+.vignette {
+  position: fixed;
+  top: 0; 
+  left: 0; 
+  width: 100%; 
+  height: 100%;
+  box-shadow: 0 0 200px rgba(0,0,0,0.9) inset;
+  pointer-events: none;
+  z-index: 50;
 }
