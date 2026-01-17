@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   HelpCircle, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Activity, 
   Clock, BarChart2, Search, ChevronLeft, ChevronRight, Download, PieChart as PieIcon,
-  Users, Calendar, Layers, DollarSign, Trash2 // <-- Ditambahkan Trash2
+  Users, Calendar, Layers, DollarSign, Trash2
 } from 'lucide-react';
 import { 
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
@@ -11,7 +11,7 @@ import {
 
 // --- API CONFIG ---
 const API_URL = 'https://quant-dashboard-eta.vercel.app/api/trades'; 
-const API_BASE = 'https://quant-dashboard-eta.vercel.app'; // Base URL untuk delete API
+const API_BASE = 'https://quant-dashboard-eta.vercel.app'; 
 
 // --- HELPER FUNCTIONS ---
 const formatDuration = (ms) => {
@@ -22,12 +22,24 @@ const formatDuration = (ms) => {
   return `${hours}h:${minutes}m:${seconds}s`;
 };
 
-const formatCurrency = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(value);
+// FORMAT MATA UANG DINAMIS
+const formatCurrency = (value, currencyCode = 'USD') => {
+  try {
+    return new Intl.NumberFormat('id-ID', { 
+      style: 'currency', 
+      currency: currencyCode, 
+      minimumFractionDigits: 2 
+    }).format(value);
+  } catch (e) {
+    return `${currencyCode} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(value)}`;
+  }
+};
+
 const formatNumber = (value) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(value);
 
 const downloadCSV = (data) => {
-    const headers = ["Ticket", "Account", "Open Date", "Symbol", "Side", "Entry", "Exit", "Qty", "PnL", "Status"];
-    const rows = data.map(t => [t.id, t.accountId || 'N/A', t.openDate, t.symbol, t.side, t.entry, t.exit, t.qty, t.pnl, t.status]);
+    const headers = ["Ticket", "Account", "Currency", "Open Date", "Symbol", "Side", "Entry", "Exit", "Qty", "PnL", "Status"];
+    const rows = data.map(t => [t.id, t.accountId || 'N/A', t.currency || 'USD', t.openDate, t.symbol, t.side, t.entry, t.exit, t.qty, t.pnl, t.status]);
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -64,7 +76,7 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-const StatCard = ({ label, value, prefix = '$', icon: Icon, subValue = null }) => (
+const StatCard = ({ label, value, prefix = null, icon: Icon, subValue = null }) => (
   <div className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-2xl p-5 flex flex-col justify-between hover:border-gray-700 hover:bg-[#0f0f0f] transition-all duration-300 group h-[115px] relative overflow-hidden">
     <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/5 rounded-full blur-3xl -mr-10 -mt-10 transition-opacity group-hover:opacity-100 opacity-40"></div>
     <div className="flex items-center justify-between text-gray-500 text-[10px] font-bold tracking-wider uppercase z-10">
@@ -72,13 +84,14 @@ const StatCard = ({ label, value, prefix = '$', icon: Icon, subValue = null }) =
       <HelpCircle size={12} className="cursor-pointer hover:text-gray-300 transition-colors" />
     </div>
     <div className="z-10 mt-2">
-        <div className="text-[26px] font-bold text-gray-100 tracking-tight leading-none tabular-nums font-mono">{prefix}{value}</div>
+        <div className="text-[26px] font-bold text-gray-100 tracking-tight leading-none tabular-nums font-mono">
+            {prefix && prefix} {value}
+        </div>
         {subValue && (<div className="text-[10px] text-gray-500 mt-1 font-mono">{subValue}</div>)}
     </div>
   </div>
 );
 
-// New Overview Card with Risk Alert Support
 const OverviewCard = ({ title, value, subValue, isNegative, icon: Icon, isAlert = false }) => (
   <div className={`border rounded-xl p-4 relative overflow-hidden group transition-all duration-500 ${isAlert ? 'bg-red-900/10 border-red-500/50 animate-pulse' : 'bg-[#0A0A0A] border-[#1C1C1C] hover:border-gray-700'}`}>
     <div className="flex justify-between items-start mb-2">
@@ -92,13 +105,13 @@ const OverviewCard = ({ title, value, subValue, isNegative, icon: Icon, isAlert 
   </div>
 );
 
-const SimpleBarChart = ({ data, xKey, yKey, color }) => (
+const SimpleBarChart = ({ data, xKey, yKey, color, currency }) => (
   <ResponsiveContainer width="100%" height="100%">
     <BarChart data={data} margin={{top:5, right:5, left:-20, bottom:0}}>
       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
       <XAxis dataKey={xKey} stroke="#4b5563" tick={{fontSize: 9, fontFamily: 'monospace'}} tickLine={false} axisLine={false} />
       <YAxis stroke="#4b5563" tick={{fontSize: 9, fontFamily: 'monospace'}} tickLine={false} axisLine={false} />
-      <Tooltip cursor={{fill: '#ffffff05'}} contentStyle={{ backgroundColor: '#050505', borderColor: '#333', fontSize: '11px', borderRadius: '8px' }} formatter={(val) => [`$${val.toFixed(2)}`, 'PnL']} />
+      <Tooltip cursor={{fill: '#ffffff05'}} contentStyle={{ backgroundColor: '#050505', borderColor: '#333', fontSize: '11px', borderRadius: '8px' }} formatter={(val) => [formatCurrency(val, currency), 'PnL']} />
       <Bar dataKey={yKey} fill={color} radius={[2, 2, 0, 0]}>
          {data.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry[yKey] >= 0 ? color : '#ef4444'} />))}
       </Bar>
@@ -106,7 +119,7 @@ const SimpleBarChart = ({ data, xKey, yKey, color }) => (
   </ResponsiveContainer>
 );
 
-const AdvancedChart = ({ data }) => {
+const AdvancedChart = ({ data, currency }) => {
   const [view, setView] = useState('equity'); 
   if (!data || data.length === 0) return <div className="h-full flex items-center justify-center text-gray-600 text-xs font-mono">WAITING FOR DATA STREAM...</div>;
   const reversedData = [...data].reverse();
@@ -122,14 +135,14 @@ const AdvancedChart = ({ data }) => {
                 <button onClick={() => setView('equity')} className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${view === 'equity' ? 'bg-[#222] text-green-400 shadow-sm border border-[#333]' : 'text-gray-500 hover:text-gray-300'}`}>Equity Curve</button>
                 <button onClick={() => setView('daily')} className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${view === 'daily' ? 'bg-[#222] text-blue-400 shadow-sm border border-[#333]' : 'text-gray-500 hover:text-gray-300'}`}>Daily P&L</button>
             </div>
-            <div className="flex gap-4 text-[10px] text-gray-500 font-mono"><span>{view === 'equity' ? 'X: Trade Count' : 'X: Date'}</span><span>Y: USD ($)</span></div>
+            <div className="flex gap-4 text-[10px] text-gray-500 font-mono"><span>{view === 'equity' ? 'X: Trade Count' : 'X: Date'}</span><span>Y: {currency}</span></div>
         </div>
         <div className="flex-1 w-full min-h-0">
             <ResponsiveContainer width="100%" height="100%">
               {view === 'equity' ? (
-                  <AreaChart data={equityData}><defs><linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/><stop offset="95%" stopColor="#22c55e" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} /><XAxis dataKey="name" stroke="#4b5563" tick={{fontSize: 10, fontFamily: 'monospace'}} tickLine={false} axisLine={false} /><YAxis stroke="#4b5563" tick={{fontSize: 10, fontFamily: 'monospace'}} tickFormatter={(val) => `$${val}`} tickLine={false} axisLine={false} /><Tooltip contentStyle={{ backgroundColor: '#050505', borderColor: '#333', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }} itemStyle={{ color: '#fff' }} formatter={(value) => [`$${value.toFixed(2)}`, 'Equity']} labelFormatter={(label) => `Trade #${label}`} /><Area type="monotone" dataKey="balance" stroke="#22c55e" strokeWidth={2} fillOpacity={1} fill="url(#colorBalance)" animationDuration={1000} /></AreaChart>
+                  <AreaChart data={equityData}><defs><linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/><stop offset="95%" stopColor="#22c55e" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} /><XAxis dataKey="name" stroke="#4b5563" tick={{fontSize: 10, fontFamily: 'monospace'}} tickLine={false} axisLine={false} /><YAxis stroke="#4b5563" tick={{fontSize: 10, fontFamily: 'monospace'}} tickFormatter={(val) => formatNumber(val)} tickLine={false} axisLine={false} /><Tooltip contentStyle={{ backgroundColor: '#050505', borderColor: '#333', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }} itemStyle={{ color: '#e2e8f0' }} formatter={(value) => [formatCurrency(value, currency), 'Equity']} labelFormatter={(label) => `Trade #${label}`} /><Area type="monotone" dataKey="balance" stroke="#22c55e" strokeWidth={2} fillOpacity={1} fill="url(#colorBalance)" animationDuration={1000} /></AreaChart>
               ) : (
-                  <BarChart data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} /><XAxis dataKey="date" stroke="#4b5563" tick={{fontSize: 10, fontFamily: 'monospace'}} tickLine={false} axisLine={false} /><YAxis stroke="#4b5563" tick={{fontSize: 10, fontFamily: 'monospace'}} tickFormatter={(val) => `$${val}`} tickLine={false} axisLine={false} /><Tooltip cursor={{fill: '#ffffff10'}} contentStyle={{ backgroundColor: '#050505', borderColor: '#333', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }} itemStyle={{ color: '#fff' }} formatter={(value) => [`$${value.toFixed(2)}`, 'Profit/Loss']} /><ReferenceLine y={0} stroke="#374151" /><Bar dataKey="pnl" animationDuration={1000}>{dailyData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#22c55e' : '#ef4444'} />))}</Bar></BarChart>
+                  <BarChart data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} /><XAxis dataKey="date" stroke="#4b5563" tick={{fontSize: 10, fontFamily: 'monospace'}} tickLine={false} axisLine={false} /><YAxis stroke="#4b5563" tick={{fontSize: 10, fontFamily: 'monospace'}} tickFormatter={(val) => formatNumber(val)} tickLine={false} axisLine={false} /><Tooltip cursor={{fill: '#ffffff10'}} contentStyle={{ backgroundColor: '#050505', borderColor: '#333', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }} itemStyle={{ color: '#fff' }} formatter={(value) => [formatCurrency(value, currency), 'Profit/Loss']} /><ReferenceLine y={0} stroke="#374151" /><Bar dataKey="pnl" animationDuration={1000}>{dailyData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#22c55e' : '#ef4444'} />))}</Bar></BarChart>
               )}
             </ResponsiveContainer>
         </div>
@@ -181,7 +194,9 @@ const WinRateGauge = ({ percentage }) => {
 
 export default function TradingDashboard() {
   const [trades, setTrades] = useState([]);
-  const [selectedAccount, setSelectedAccount] = useState('ALL');
+  
+  // MODIFIKASI: Default state string kosong
+  const [selectedAccount, setSelectedAccount] = useState('');
   const [availableAccounts, setAvailableAccounts] = useState([]);
   
   const [filter, setFilter] = useState('Both');
@@ -212,7 +227,11 @@ export default function TradingDashboard() {
   const fetchTrades = async () => {
     const startTime = Date.now();
     try {
-      const url = selectedAccount === 'ALL' ? API_URL : `${API_URL}?accountId=${selectedAccount}`;
+      // Ambil data (jika belum ada akun terpilih, request tanpa filter untuk dapat list akun)
+      const url = (!selectedAccount) 
+        ? API_URL 
+        : `${API_URL}?accountId=${selectedAccount}`;
+        
       const response = await fetch(url);
       const data = await response.json();
       
@@ -232,11 +251,23 @@ export default function TradingDashboard() {
       });
       let cleanData = Array.from(tradeMap.values());
       
+      // LOGIKA AKUN OTOMATIS
       if(cleanData.length > 0) {
-          const incomingAccounts = cleanData.map(d => d.accountId).filter(acc => acc && acc !== 'undefined' && acc !== 'null');
-          setAvailableAccounts(prev => Array.from(new Set([...prev, ...incomingAccounts])).sort());
+          const incomingAccounts = cleanData
+            .map(d => d.accountId)
+            .filter(acc => acc && acc !== 'undefined' && acc !== 'null');
+          
+          const uniqueAccounts = Array.from(new Set(incomingAccounts)).sort();
+          setAvailableAccounts(uniqueAccounts);
+
+          // JIKA BELUM ADA AKUN DIPILIH, PILIH YANG PERTAMA
+          if (!selectedAccount && uniqueAccounts.length > 0) {
+             setSelectedAccount(uniqueAccounts[0]);
+          }
       }
-      if (selectedAccount !== 'ALL') {
+
+      // Filter Data di Frontend agar aman
+      if (selectedAccount) {
           cleanData = cleanData.filter(t => String(t.accountId) === String(selectedAccount));
       }
 
@@ -263,6 +294,16 @@ export default function TradingDashboard() {
     return () => clearInterval(interval);
   }, [selectedAccount]); 
 
+  // --- AUTO-DETECT MATA UANG ---
+  const activeCurrency = useMemo(() => {
+    if (trades.length === 0) return 'USD';
+    
+    // Ambil mata uang dari trade pertama di list (karena sudah difilter per akun)
+    const tradeWithCurrency = trades.find(t => t.currency);
+    return tradeWithCurrency ? tradeWithCurrency.currency : 'USD';
+  }, [trades]);
+
+  // --- LOGIC CALCULATE STATS (YANG TADI HILANG) ---
   useEffect(() => {
     if (trades.length === 0) {
         setStats({ netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0, profitFactor: 0, totalTrades: 0, bestProfit: 0, biggestLoss: 0, expectancy: 0, avgTradeSize: 0, avgDuration: "0h:00m:00s" });
@@ -372,15 +413,11 @@ export default function TradingDashboard() {
 
   // --- LOGIC: DELETE ACCOUNT ---
   const handleDeleteAccount = async () => {
-    if (selectedAccount === 'ALL') {
-        alert("Pilih akun spesifik yang ingin dihapus terlebih dahulu!");
-        return;
-    }
+    if (!selectedAccount) return;
 
     const isConfirmed = window.confirm(`⚠️ PERINGATAN KERAS ⚠️\n\nAnda akan menghapus SELURUH data untuk Akun: ${selectedAccount}.\n\nTindakan ini tidak bisa dibatalkan. Apakah Anda yakin?`);
     
     if (isConfirmed) {
-        // Minta kunci rahasia
         const userSecret = prompt("Masukkan KUNCI RAHASIA Admin untuk konfirmasi penghapusan:");
         
         if (!userSecret) return;
@@ -391,7 +428,7 @@ export default function TradingDashboard() {
             
             if (res.ok) {
                 alert(`✅ BERHASIL: ${result.message || 'Akun telah dihapus.'}`);
-                setSelectedAccount('ALL'); 
+                setSelectedAccount(''); // Reset account
                 window.location.reload(); 
             } else {
                 alert(`❌ GAGAL: ${result.error}`);
@@ -404,6 +441,9 @@ export default function TradingDashboard() {
 
   const isHighRisk = extraMetrics.balance > 0 && (extraMetrics.floatingPnL / extraMetrics.balance) < -0.05;
 
+  // Render Helper untuk format mata uang
+  const fmtCurr = (val) => formatCurrency(val, activeCurrency);
+
   return (
     <div className="min-h-screen bg-[#050505] text-gray-200 p-6 md:p-8 font-sans selection:bg-green-500/30">
       
@@ -413,6 +453,10 @@ export default function TradingDashboard() {
             <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
                 <Activity className="text-green-500" size={32} /> QUANT DASHBOARD 
                 <span className="text-[10px] bg-green-500/10 text-green-500 border border-green-500/20 px-2 py-0.5 rounded uppercase tracking-wider animate-pulse">Live System</span>
+              {/* DEBUGGER: Hapus nanti jika sudah fix */}
+<span className="text-[10px] text-yellow-500 font-mono border border-yellow-500 px-2 rounded">
+  DETECTED: {activeCurrency}
+</span>
             </h1>
             <p className="text-gray-500 text-xs mt-1 tracking-wide font-mono flex items-center gap-1">
                 Connected via Node.js Bridge • Latency: 
@@ -426,14 +470,15 @@ export default function TradingDashboard() {
                 <div className="relative group bg-[#111] rounded-lg border border-[#222] flex items-center px-3 py-2 gap-2">
                     <Users size={14} className="text-gray-500"/>
                     <select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)} className="bg-transparent text-xs font-bold text-gray-300 focus:outline-none appearance-none cursor-pointer min-w-[120px]">
-                        <option value="ALL">ALL ACCOUNTS</option>
+                        {/* HAPUS OPSI ALL ACCOUNTS */}
+                        {availableAccounts.length === 0 && <option value="">Loading...</option>}
                         {availableAccounts.map(acc => ( <option key={acc} value={acc}>Account {acc} {trades.length > 0 && trades[0].accountId === acc ? ' (Active)' : ''}</option> ))}
                     </select>
                     <div className="pointer-events-none text-gray-500 text-[10px]">▼</div>
                 </div>
 
-                {/* TOMBOL DELETE (Hanya Muncul jika Akun Dipilih) */}
-                {selectedAccount !== 'ALL' && (
+                {/* TOMBOL DELETE (Hanya Muncul jika Akun Ada) */}
+                {selectedAccount && (
                     <button 
                         onClick={handleDeleteAccount}
                         className="p-2.5 rounded-lg bg-red-900/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all shadow-sm"
@@ -470,29 +515,29 @@ export default function TradingDashboard() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <OverviewCard 
             title="Current Equity" 
-            value={formatCurrency(extraMetrics.equity)} 
+            value={fmtCurr(extraMetrics.equity)} 
             isNegative={false} 
             icon={DollarSign} 
-            subValue={`${extraMetrics.floatingPnL >= 0 ? '+' : ''}${formatCurrency(extraMetrics.floatingPnL)} Floating`} 
+            subValue={`${extraMetrics.floatingPnL >= 0 ? '+' : ''}${fmtCurr(extraMetrics.floatingPnL)} Floating`} 
             isAlert={isHighRisk} 
           />
-          <OverviewCard title="Current Balance" value={formatCurrency(extraMetrics.balance)} icon={Layers} />
-          <OverviewCard title="Net Return" value={formatCurrency(stats.netProfit)} isNegative={stats.netProfit < 0} icon={TrendingUp} />
-          <OverviewCard title="Daily Drawdown" value={`-${formatCurrency(extraMetrics.dailyDD)}`} isNegative={true} icon={TrendingDown} />
-          <OverviewCard title="Max Drawdown" value={`-${formatCurrency(extraMetrics.maxDD)}`} isNegative={true} icon={Activity} />
+          <OverviewCard title="Current Balance" value={fmtCurr(extraMetrics.balance)} icon={Layers} />
+          <OverviewCard title="Net Return" value={fmtCurr(stats.netProfit)} isNegative={stats.netProfit < 0} icon={TrendingUp} />
+          <OverviewCard title="Daily Drawdown" value={`-${fmtCurr(extraMetrics.dailyDD)}`} isNegative={true} icon={TrendingDown} />
+          <OverviewCard title="Max Drawdown" value={`-${fmtCurr(extraMetrics.maxDD)}`} isNegative={true} icon={Activity} />
           <OverviewCard title="Trading Days" value={extraMetrics.tradingDays} icon={Calendar} />
         </div>
 
         {/* --- SECTION: STATS CARDS & GAUGE --- */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 grid grid-cols-2 md:grid-cols-3 gap-4">
-            <StatCard label="Net Profit" value={stats.netProfit} icon={TrendingUp} />
-            <StatCard label="Gross Profit" value={stats.grossProfit} />
-            <StatCard label="Gross Loss" value={stats.grossLoss} />
+            <StatCard label="Net Profit" value={fmtCurr(stats.netProfit)} icon={TrendingUp} prefix="" />
+            <StatCard label="Gross Profit" value={fmtCurr(stats.grossProfit)} prefix="" />
+            <StatCard label="Gross Loss" value={fmtCurr(stats.grossLoss)} prefix="" />
             <StatCard label="Profit Factor" value={stats.profitFactor} prefix="" />
-            <StatCard label="Best Profit" value={stats.bestProfit} />
-            <StatCard label="Biggest Loss" value={stats.biggestLoss} />
-            <StatCard label="Expectancy" value={stats.expectancy} />
+            <StatCard label="Best Profit" value={fmtCurr(stats.bestProfit)} prefix="" />
+            <StatCard label="Biggest Loss" value={fmtCurr(stats.biggestLoss)} prefix="" />
+            <StatCard label="Expectancy" value={fmtCurr(stats.expectancy)} prefix="" />
             <StatCard label="Avg. Trade Size" value={stats.avgTradeSize} prefix="" icon={BarChart2} subValue="Lots / Trade" />
             <StatCard label="Avg. Duration" value={stats.avgDuration} prefix="" icon={Clock} subValue="Time in Market" />
           </div>
@@ -506,7 +551,7 @@ export default function TradingDashboard() {
         {/* --- SECTION: MAIN CHARTS --- */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 bg-[#0A0A0A] border border-[#1C1C1C] rounded-2xl p-6 h-[300px]">
-              <AdvancedChart data={trades} />
+              <AdvancedChart data={trades} currency={activeCurrency} />
           </div>
           <div className="lg:col-span-4 bg-[#0A0A0A] border border-[#1C1C1C] rounded-2xl p-6 h-[300px]">
               <AnalyticsCharts trades={trades} />
@@ -517,11 +562,11 @@ export default function TradingDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-xl p-5 h-[280px]">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">P & L by Weekday</h3>
-                <SimpleBarChart data={charts.weekday} xKey="day" yKey="val" color="#3b82f6" />
+                <SimpleBarChart data={charts.weekday} xKey="day" yKey="val" color="#3b82f6" currency={activeCurrency} />
              </div>
              <div className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-xl p-5 h-[280px]">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">P & L by Hours</h3>
-                <SimpleBarChart data={charts.hourly} xKey="hour" yKey="val" color="#8b5cf6" />
+                <SimpleBarChart data={charts.hourly} xKey="hour" yKey="val" color="#8b5cf6" currency={activeCurrency} />
              </div>
         </div>
 
@@ -544,7 +589,7 @@ export default function TradingDashboard() {
                     <td className="p-3 text-center text-white">{sym.trades}</td>
                     <td className="p-3 text-center text-green-400">{sym.wins}</td>
                     <td className="p-3 text-center text-red-400">{sym.losses}</td>
-                    <td className={`p-3 text-right font-bold ${sym.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(sym.pnl)}</td>
+                    <td className={`p-3 text-right font-bold ${sym.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtCurr(sym.pnl)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -568,7 +613,7 @@ export default function TradingDashboard() {
                 <tbody className="text-sm">
                   {currentItems.length > 0 ? currentItems.map((trade, idx) => (
                     <tr key={idx} className="border-b border-[#1C1C1C]/40 hover:bg-white/[0.02] transition-colors group">
-                      <td className="py-4 px-3 text-gray-500 text-[10px] tabular-nums font-mono border-l-2 border-transparent group-hover:border-green-500 transition-all">{trade.id}</td><td className="py-4 px-3 text-blue-400 text-[10px] tabular-nums font-mono opacity-70">{trade.accountId || '-'}</td><td className="py-4 px-3 text-gray-500 text-[10px] tabular-nums font-mono">{trade.openDate}</td><td className="py-4 px-3 font-bold text-white text-[11px] tracking-wide">{trade.symbol}</td><td className="py-4 px-3"><span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-opacity-10 ${trade.side === 'Buy' ? 'text-green-500 bg-green-500' : 'text-red-500 bg-red-500'}`}>{trade.side}</span></td><td className="py-4 px-3 text-gray-300 text-[11px] font-mono tabular-nums">{parseFloat(trade.entry).toFixed(2)}</td><td className="py-4 px-3 text-gray-300 text-[11px] font-mono tabular-nums">{parseFloat(trade.exit).toFixed(2)}</td><td className="py-4 px-3 text-gray-300 text-[11px] font-mono tabular-nums">{parseFloat(trade.qty).toFixed(2)}</td><td className={`py-4 px-3 font-bold text-[11px] font-mono tabular-nums ${parseFloat(trade.pnl) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{parseFloat(trade.pnl) >= 0 ? `+${formatCurrency(trade.pnl)}` : formatCurrency(trade.pnl)}</td><td className="py-4 px-3"><StatusBadge status={trade.status} /></td>
+                      <td className="py-4 px-3 text-gray-500 text-[10px] tabular-nums font-mono border-l-2 border-transparent group-hover:border-green-500 transition-all">{trade.id}</td><td className="py-4 px-3 text-blue-400 text-[10px] tabular-nums font-mono opacity-70">{trade.accountId || '-'}</td><td className="py-4 px-3 text-gray-500 text-[10px] tabular-nums font-mono">{trade.openDate}</td><td className="py-4 px-3 font-bold text-white text-[11px] tracking-wide">{trade.symbol}</td><td className="py-4 px-3"><span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-opacity-10 ${trade.side === 'Buy' ? 'text-green-500 bg-green-500' : 'text-red-500 bg-red-500'}`}>{trade.side}</span></td><td className="py-4 px-3 text-gray-300 text-[11px] font-mono tabular-nums">{parseFloat(trade.entry).toFixed(2)}</td><td className="py-4 px-3 text-gray-300 text-[11px] font-mono tabular-nums">{parseFloat(trade.exit).toFixed(2)}</td><td className="py-4 px-3 text-gray-300 text-[11px] font-mono tabular-nums">{parseFloat(trade.qty).toFixed(2)}</td><td className={`py-4 px-3 font-bold text-[11px] font-mono tabular-nums ${parseFloat(trade.pnl) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtCurr(trade.pnl)}</td><td className="py-4 px-3"><StatusBadge status={trade.status} /></td>
                     </tr>
                   )) : (<tr><td colSpan="10" className="py-10 text-center text-gray-600 text-xs uppercase tracking-widest">No data match found</td></tr>)}
                 </tbody>

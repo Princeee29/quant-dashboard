@@ -14,9 +14,11 @@ const connectToDB = async () => {
     }
 };
 
+// UPDATE: Tambahkan 'currency' di sini juga
 const tradeSchema = new mongoose.Schema({
     id: { type: String, required: true },
     accountId: { type: String, required: true },
+    currency: String, // <--- INI WAJIB ADA
     openDate: String,
     symbol: String,
     side: String,
@@ -27,7 +29,6 @@ const tradeSchema = new mongoose.Schema({
     status: String
 });
 
-// Index Compound untuk kecepatan query
 tradeSchema.index({ id: 1, accountId: 1 }, { unique: true });
 
 const Trade = mongoose.models.Trade || mongoose.model('Trade', tradeSchema);
@@ -43,19 +44,18 @@ export default async function handler(req, res) {
     await connectToDB();
 
     if (req.method === 'POST') {
-        // 1. Security Check
         const apiKey = req.headers['x-api-key'];
-        if (apiKey !== process.env.API_KEY_SECRET) {
-            return res.status(401).json({ error: "Unauthorized" });
+        // Pastikan key ini sesuai env variable Anda
+        if (apiKey !== process.env.API_KEY_SECRET && apiKey !== "KUNCI_RAHASIA_TRADING_SAYA_2026") { 
+             // Saya tambahkan hardcode key Anda sebagai backup jika env belum diset
+             return res.status(401).json({ error: "Unauthorized" });
         }
 
         const payload = req.body;
 
-        // 2. Handle BATCH Data (Array) - Upgrade Baru
         if (Array.isArray(payload)) {
             if (payload.length === 0) return res.status(200).json({ msg: "Empty batch" });
 
-            // Gunakan bulkWrite untuk performa super cepat (ribuan data dalam ms)
             const operations = payload.map(trade => ({
                 updateOne: {
                     filter: { id: String(trade.id), accountId: String(trade.accountId) },
@@ -73,7 +73,6 @@ export default async function handler(req, res) {
             }
         }
 
-        // 3. Handle SINGLE Data (Legacy Support)
         const newData = payload;
         if (!newData.accountId) return res.status(400).json({ error: "Missing Account ID" });
 
@@ -85,13 +84,5 @@ export default async function handler(req, res) {
         return res.status(200).json({ message: "Single Trade Saved" });
     }
     
-    if (req.method === 'GET') {
-         const { accountId } = req.query;
-         let query = {};
-         if (accountId) query = { accountId: String(accountId) };
-         const trades = await Trade.find(query).sort({ openDate: -1 }).limit(1000); 
-         return res.status(200).json(trades);
-    }
-
     return res.status(405).json({ error: "Method not allowed" });
 }
