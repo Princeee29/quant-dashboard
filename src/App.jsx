@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  HelpCircle, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Activity, 
+  HelpCircle, TrendingUp, TrendingDown, Activity, 
   Clock, BarChart2, Search, ChevronLeft, ChevronRight, Download, PieChart as PieIcon,
-  Users, Calendar, Layers, DollarSign, Trash2
+  Users, Calendar, Layers, DollarSign, Trash2, Zap, Radio, AlertTriangle
 } from 'lucide-react';
 import { 
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
@@ -13,6 +13,9 @@ import {
 const API_URL = 'https://quant-dashboard-eta.vercel.app/api/trades'; 
 const API_BASE = 'https://quant-dashboard-eta.vercel.app'; 
 
+// --- CONFIG: SALDO AWAL (Ubah ini sesuai kebutuhan atau buat dinamis) ---
+const INITIAL_BALANCE = 100000; 
+
 // --- HELPER FUNCTIONS ---
 const formatDuration = (ms) => {
   if (!ms || ms < 0) return "0h:00m:00s";
@@ -22,7 +25,6 @@ const formatDuration = (ms) => {
   return `${hours}h:${minutes}m:${seconds}s`;
 };
 
-// FORMAT MATA UANG DINAMIS
 const formatCurrency = (value, currencyCode = 'USD') => {
   try {
     return new Intl.NumberFormat('id-ID', { 
@@ -50,7 +52,6 @@ const downloadCSV = (data) => {
     document.body.removeChild(link);
 };
 
-// --- AUDIO UTILITY ---
 const playWinSound = () => {
     try {
         const audio = new Audio("https://cdn.pixabay.com/audio/2021/08/04/audio_0625c1539c.mp3"); 
@@ -62,58 +63,85 @@ const playWinSound = () => {
 // --- KOMPONEN UI ---
 
 const StatusBadge = ({ status }) => {
-  const label = status || '';
-  const isWin = label === 'Win'; const isOpen = label === 'Open';
+  // Fix logic deteksi status Open (Case Insensitive)
+  const normalizedStatus = status ? status.toLowerCase() : '';
+  const isWin = normalizedStatus === 'win';
+  const isOpen = normalizedStatus === 'open';
+  
   if (isOpen) return (
-      <div className="flex items-center justify-center gap-2 px-2 py-1 rounded text-[10px] font-bold border w-[80px] uppercase tracking-wider shadow-[0_0_12px_rgba(59,130,246,0.3)] border-blue-500/50 text-blue-400 bg-blue-500/10 animate-pulse">
-         <div className="relative flex h-1.5 w-1.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-blue-500"></span></div>OPEN
+      <div className="relative flex items-center justify-center px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+         <div className="absolute inset-0 rounded-full animate-pulse bg-blue-500/5"></div>
+         <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mr-2 animate-ping"></span>
+         <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider font-mono">OPEN</span>
       </div>
   );
+  
   return (
-    <div className={`flex items-center justify-center gap-1 px-2 py-1 rounded text-[10px] font-bold border w-[80px] uppercase tracking-wider shadow-sm ${isWin ? 'border-green-500/30 text-green-400 bg-green-500/5' : 'border-red-500/30 text-red-400 bg-red-500/5'}`}>
-      {isWin ? <ArrowUpRight size={10} strokeWidth={3} /> : <ArrowDownRight size={10} strokeWidth={3} />} {status}
+    <div className={`
+      flex items-center justify-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider shadow-sm transition-all duration-300 font-mono
+      ${isWin 
+        ? 'bg-[#00e676]/5 border-[#00e676]/20 text-[#00e676] shadow-[0_0_10px_rgba(0,230,118,0.1)]' 
+        : 'bg-[#ff1744]/5 border-[#ff1744]/20 text-[#ff1744] shadow-[0_0_10px_rgba(255,23,68,0.1)]'}
+    `}>
+      {status}
     </div>
   );
 };
 
-const StatCard = ({ label, value, prefix = null, icon: Icon, subValue = null }) => (
-  <div className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-2xl p-5 flex flex-col justify-between hover:border-gray-700 hover:bg-[#0f0f0f] transition-all duration-300 group h-[115px] relative overflow-hidden">
-    <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/5 rounded-full blur-3xl -mr-10 -mt-10 transition-opacity group-hover:opacity-100 opacity-40"></div>
-    <div className="flex items-center justify-between text-gray-500 text-[10px] font-bold tracking-wider uppercase z-10">
-      <div className="flex items-center gap-2">{Icon && <Icon size={14} className="text-gray-600 group-hover:text-green-500 transition-colors" />}{label}</div>
-      <HelpCircle size={12} className="cursor-pointer hover:text-gray-300 transition-colors" />
-    </div>
-    <div className="z-10 mt-2">
-        <div className="text-[26px] font-bold text-gray-100 tracking-tight leading-none tabular-nums font-mono">
-            {prefix && prefix} {value}
+const StatCard = ({ label, value, prefix = null, icon: Icon, subValue = null, className = "" }) => (
+  <div className={`group relative bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl p-5 overflow-hidden hover:border-white/10 transition-all duration-300 ${className}`}>
+    <div className="absolute -inset-1 bg-gradient-to-r from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-500"></div>
+    
+    <div className="relative z-10 flex flex-col justify-between h-full min-h-[90px]">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 font-mono truncate">
+            {Icon && <Icon size={14} className="text-gray-600 group-hover:text-blue-400 transition-colors" />}
+            {label}
+          </span>
+          <div className="w-1 h-1 rounded-full bg-gray-700 group-hover:bg-blue-400 transition-colors"></div>
         </div>
-        {subValue && (<div className="text-[10px] text-gray-500 mt-1 font-mono">{subValue}</div>)}
+        
+        <div className="flex flex-col">
+            <div className="text-2xl lg:text-3xl font-bold text-gray-100 tracking-tight font-mono tabular-nums truncate">
+                <span className="text-gray-500 text-lg mr-1">{prefix}</span>{value}
+            </div>
+            {subValue && (<div className="text-[10px] text-gray-600 mt-1 font-mono flex items-center gap-1 border-t border-dashed border-white/5 pt-2 truncate">
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-700"></span> {subValue}
+            </div>)}
+        </div>
     </div>
   </div>
 );
 
 const OverviewCard = ({ title, value, subValue, isNegative, icon: Icon, isAlert = false }) => (
-  <div className={`border rounded-xl p-4 relative overflow-hidden group transition-all duration-500 ${isAlert ? 'bg-red-900/10 border-red-500/50 animate-pulse' : 'bg-[#0A0A0A] border-[#1C1C1C] hover:border-gray-700'}`}>
-    <div className="flex justify-between items-start mb-2">
-      <span className={`text-[10px] uppercase font-bold tracking-wider ${isAlert ? 'text-red-400' : 'text-gray-500'}`}>{title}</span>
-      {Icon && <Icon size={14} className={`${isAlert ? 'text-red-400' : 'text-gray-600'} group-hover:text-blue-500 transition-colors`} />}
+  <div className={`
+    relative overflow-hidden rounded-xl p-4 border transition-all duration-300
+    ${isAlert 
+      ? 'bg-red-900/10 border-red-500/30 animate-pulse' 
+      : 'bg-gradient-to-br from-[#090c10] to-[#050505] border-white/5 hover:border-white/10'}
+  `}>
+    <div className="flex justify-between items-start mb-3">
+      <span className={`text-[10px] uppercase font-bold tracking-widest font-mono ${isAlert ? 'text-red-400' : 'text-gray-500'}`}>{title}</span>
+      <div className={`p-1.5 rounded-lg ${isAlert ? 'bg-red-500/10' : 'bg-white/5'}`}>
+        {Icon && <Icon size={14} className={`${isAlert ? 'text-red-400' : 'text-gray-400'}`} />}
+      </div>
     </div>
-    <div className={`text-xl font-bold font-mono tracking-tight ${isNegative || isAlert ? 'text-red-400' : 'text-gray-100'}`}>
+    <div className={`text-lg md:text-xl font-bold font-mono tracking-tight ${isNegative || isAlert ? 'text-[#ff1744] drop-shadow-[0_0_8px_rgba(255,23,68,0.3)]' : 'text-gray-100'}`}>
       {value}
     </div>
-    {subValue && <div className={`text-[10px] mt-1 font-mono ${isAlert ? 'text-red-300 font-bold' : 'text-gray-500'}`}>{subValue}</div>}
+    {subValue && <div className={`text-[10px] mt-1 font-mono ${isAlert ? 'text-red-300' : 'text-gray-600'}`}>{subValue}</div>}
   </div>
 );
 
 const SimpleBarChart = ({ data, xKey, yKey, color, currency }) => (
   <ResponsiveContainer width="100%" height="100%">
     <BarChart data={data} margin={{top:5, right:5, left:-20, bottom:0}}>
-      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-      <XAxis dataKey={xKey} stroke="#4b5563" tick={{fontSize: 9, fontFamily: 'monospace'}} tickLine={false} axisLine={false} />
-      <YAxis stroke="#4b5563" tick={{fontSize: 9, fontFamily: 'monospace'}} tickLine={false} axisLine={false} />
-      <Tooltip cursor={{fill: '#ffffff05'}} contentStyle={{ backgroundColor: '#050505', borderColor: '#333', fontSize: '11px', borderRadius: '8px' }} formatter={(val) => [formatCurrency(val, currency), 'PnL']} />
+      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
+      <XAxis dataKey={xKey} stroke="#525252" tick={{fontSize: 9, fontFamily: 'monospace'}} tickLine={false} axisLine={false} />
+      <YAxis stroke="#525252" tick={{fontSize: 9, fontFamily: 'monospace'}} tickLine={false} axisLine={false} />
+      <Tooltip cursor={{fill: '#ffffff05'}} contentStyle={{ backgroundColor: '#090c10', borderColor: '#333', fontSize: '11px', borderRadius: '8px', fontFamily: 'monospace' }} formatter={(val) => [formatCurrency(val, currency), 'PnL']} />
       <Bar dataKey={yKey} fill={color} radius={[2, 2, 0, 0]}>
-         {data.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry[yKey] >= 0 ? color : '#ef4444'} />))}
+         {data.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry[yKey] >= 0 ? color : '#ff1744'} />))}
       </Bar>
     </BarChart>
   </ResponsiveContainer>
@@ -121,28 +149,58 @@ const SimpleBarChart = ({ data, xKey, yKey, color, currency }) => (
 
 const AdvancedChart = ({ data, currency }) => {
   const [view, setView] = useState('equity'); 
-  if (!data || data.length === 0) return <div className="h-full flex items-center justify-center text-gray-600 text-xs font-mono">WAITING FOR DATA STREAM...</div>;
+  if (!data || data.length === 0) return <div className="h-full flex flex-col items-center justify-center gap-3 text-gray-700"><Activity className="animate-pulse" size={40}/><span className="text-xs font-mono uppercase tracking-widest">Waiting for Data Stream...</span></div>;
+  
   const reversedData = [...data].reverse();
-  let currentBalance = 0;
-  const equityData = reversedData.map((t, index) => { currentBalance += parseFloat(t.pnl); return { name: index + 1, balance: currentBalance, pnl: parseFloat(t.pnl), date: t.openDate }; });
+  
+  // FIX: Chart Equity Logic - Start from INITIAL_BALANCE
+  let currentBalance = INITIAL_BALANCE;
+  
+  const equityData = reversedData.map((t, index) => { 
+      currentBalance += parseFloat(t.pnl); 
+      return { name: index + 1, balance: currentBalance, pnl: parseFloat(t.pnl), date: t.openDate }; 
+  });
+  
   const dailyDataMap = {}; reversedData.forEach(t => { const dateKey = t.openDate.split(' ')[0]; if (!dailyDataMap[dateKey]) dailyDataMap[dateKey] = 0; dailyDataMap[dateKey] += parseFloat(t.pnl); });
   const dailyData = Object.keys(dailyDataMap).map(date => ({ date, pnl: dailyDataMap[date] }));
 
   return (
     <div className="w-full h-full flex flex-col">
-        <div className="flex justify-between items-center mb-4 px-2">
-            <div className="flex items-center gap-2 bg-black/50 p-1 rounded-lg border border-[#222]">
-                <button onClick={() => setView('equity')} className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${view === 'equity' ? 'bg-[#222] text-green-400 shadow-sm border border-[#333]' : 'text-gray-500 hover:text-gray-300'}`}>Equity Curve</button>
-                <button onClick={() => setView('daily')} className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${view === 'daily' ? 'bg-[#222] text-blue-400 shadow-sm border border-[#333]' : 'text-gray-500 hover:text-gray-300'}`}>Daily P&L</button>
+        <div className="flex justify-between items-center mb-6 px-1">
+            <div className="flex bg-black/40 p-1 rounded-lg border border-white/5 backdrop-blur-md">
+                <button onClick={() => setView('equity')} className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${view === 'equity' ? 'bg-white/10 text-[#00e676] shadow-lg border border-white/10' : 'text-gray-500 hover:text-gray-300'}`}>Equity</button>
+                <button onClick={() => setView('daily')} className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${view === 'daily' ? 'bg-white/10 text-blue-400 shadow-lg border border-white/10' : 'text-gray-500 hover:text-gray-300'}`}>Daily PnL</button>
             </div>
-            <div className="flex gap-4 text-[10px] text-gray-500 font-mono"><span>{view === 'equity' ? 'X: Trade Count' : 'X: Date'}</span><span>Y: {currency}</span></div>
+            <div className="flex gap-4 text-[9px] text-gray-600 font-mono uppercase tracking-widest">
+                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#00e676]"></div> Growth</span>
+                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Vol</span>
+            </div>
         </div>
         <div className="flex-1 w-full min-h-0">
             <ResponsiveContainer width="100%" height="100%">
               {view === 'equity' ? (
-                  <AreaChart data={equityData}><defs><linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/><stop offset="95%" stopColor="#22c55e" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} /><XAxis dataKey="name" stroke="#4b5563" tick={{fontSize: 10, fontFamily: 'monospace'}} tickLine={false} axisLine={false} /><YAxis stroke="#4b5563" tick={{fontSize: 10, fontFamily: 'monospace'}} tickFormatter={(val) => formatNumber(val)} tickLine={false} axisLine={false} /><Tooltip contentStyle={{ backgroundColor: '#050505', borderColor: '#333', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }} itemStyle={{ color: '#e2e8f0' }} formatter={(value) => [formatCurrency(value, currency), 'Equity']} labelFormatter={(label) => `Trade #${label}`} /><Area type="monotone" dataKey="balance" stroke="#22c55e" strokeWidth={2} fillOpacity={1} fill="url(#colorBalance)" animationDuration={1000} /></AreaChart>
+                  <AreaChart data={equityData}>
+                    <defs>
+                        <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#00e676" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#00e676" stopOpacity={0}/>
+                        </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
+                    <XAxis dataKey="name" stroke="#525252" tick={{fontSize: 10, fontFamily: 'monospace'}} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#525252" tick={{fontSize: 10, fontFamily: 'monospace'}} tickFormatter={(val) => formatNumber(val)} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
+                    <Tooltip contentStyle={{ backgroundColor: '#090c10', borderColor: '#333', borderRadius: '8px', fontSize: '12px', fontFamily: 'monospace', boxShadow: '0 10px 40px -10px rgba(0,0,0,0.5)' }} itemStyle={{ color: '#e2e8f0' }} formatter={(value) => [formatCurrency(value, currency), 'Equity']} />
+                    <Area type="monotone" dataKey="balance" stroke="#00e676" strokeWidth={2} fillOpacity={1} fill="url(#colorBalance)" />
+                  </AreaChart>
               ) : (
-                  <BarChart data={dailyData}><CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} /><XAxis dataKey="date" stroke="#4b5563" tick={{fontSize: 10, fontFamily: 'monospace'}} tickLine={false} axisLine={false} /><YAxis stroke="#4b5563" tick={{fontSize: 10, fontFamily: 'monospace'}} tickFormatter={(val) => formatNumber(val)} tickLine={false} axisLine={false} /><Tooltip cursor={{fill: '#ffffff10'}} contentStyle={{ backgroundColor: '#050505', borderColor: '#333', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }} itemStyle={{ color: '#fff' }} formatter={(value) => [formatCurrency(value, currency), 'Profit/Loss']} /><ReferenceLine y={0} stroke="#374151" /><Bar dataKey="pnl" animationDuration={1000}>{dailyData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#22c55e' : '#ef4444'} />))}</Bar></BarChart>
+                  <BarChart data={dailyData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
+                    <XAxis dataKey="date" stroke="#525252" tick={{fontSize: 10, fontFamily: 'monospace'}} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#525252" tick={{fontSize: 10, fontFamily: 'monospace'}} tickFormatter={(val) => formatNumber(val)} tickLine={false} axisLine={false} />
+                    <Tooltip cursor={{fill: '#ffffff05'}} contentStyle={{ backgroundColor: '#090c10', borderColor: '#333', borderRadius: '8px', fontSize: '12px', fontFamily: 'monospace' }} formatter={(value) => [formatCurrency(value, currency), 'PnL']} />
+                    <ReferenceLine y={0} stroke="#374151" />
+                    <Bar dataKey="pnl">{dailyData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#00e676' : '#ff1744'} />))}</Bar>
+                  </BarChart>
               )}
             </ResponsiveContainer>
         </div>
@@ -153,37 +211,77 @@ const AdvancedChart = ({ data, currency }) => {
 const AnalyticsCharts = ({ trades }) => {
     const symbolData = useMemo(() => { const counts = {}; trades.forEach(t => { counts[t.symbol] = (counts[t.symbol] || 0) + 1; }); return Object.keys(counts).map(key => ({ name: key, value: counts[key] })); }, [trades]);
     const sideData = useMemo(() => { const counts = { Buy: 0, Sell: 0 }; trades.forEach(t => { if(t.side === 'Buy' || t.side === 'Sell') counts[t.side]++; }); return Object.keys(counts).map(key => ({ name: key, value: counts[key] })); }, [trades]);
-    const COLORS = ['#22c55e', '#3b82f6', '#eab308', '#a855f7'];
+    const COLORS = ['#00e676', '#3b82f6', '#fbbf24', '#a855f7'];
 
     return (
         <div className="w-full h-full flex flex-col gap-4">
-             <div className="flex items-center justify-between mb-2"><h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2"><PieIcon size={14} className="text-blue-500"/> Distribution</h3></div>
-             <div className="flex-1 grid grid-cols-2 gap-2">
-                 <div className="bg-[#050505] rounded-xl border border-[#222] p-2 relative flex flex-col items-center justify-center">
-                    <div className="absolute top-2 left-2 text-[9px] text-gray-500 font-bold uppercase">Symbol Mix</div>
-                    <ResponsiveContainer width="100%" height="80%"><PieChart><Pie data={symbolData} innerRadius={35} outerRadius={50} paddingAngle={5} dataKey="value">{symbolData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="#050505" />))}</Pie><Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', fontSize: '10px' }} itemStyle={{color:'#fff'}} /></PieChart></ResponsiveContainer>
+             <div className="flex items-center justify-between mb-2"><h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 font-mono"><PieIcon size={14} className="text-blue-500"/> Portfolio Mix</h3></div>
+             <div className="flex-1 grid grid-cols-2 gap-3">
+                 <div className="bg-[#090c10]/40 rounded-xl border border-white/5 p-2 relative flex flex-col items-center justify-center">
+                    <div className="absolute top-2 left-2 text-[9px] text-gray-500 font-bold uppercase font-mono tracking-wider">Symbol</div>
+                    <ResponsiveContainer width="100%" height="80%"><PieChart><Pie data={symbolData} innerRadius={35} outerRadius={50} paddingAngle={5} dataKey="value">{symbolData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="#050505" />))}</Pie><Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', fontSize: '10px', borderRadius: '4px' }} itemStyle={{color:'#fff'}} /></PieChart></ResponsiveContainer>
                  </div>
-                 <div className="bg-[#050505] rounded-xl border border-[#222] p-2 relative flex flex-col items-center justify-center">
-                    <div className="absolute top-2 left-2 text-[9px] text-gray-500 font-bold uppercase">Side Ratio</div>
-                    <ResponsiveContainer width="100%" height="80%"><PieChart><Pie data={sideData} innerRadius={35} outerRadius={50} paddingAngle={5} dataKey="value"><Cell fill="#22c55e" stroke="#050505" /><Cell fill="#ef4444" stroke="#050505" /></Pie><Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', fontSize: '10px' }} itemStyle={{color:'#fff'}} /></PieChart></ResponsiveContainer>
+                 <div className="bg-[#090c10]/40 rounded-xl border border-white/5 p-2 relative flex flex-col items-center justify-center">
+                    <div className="absolute top-2 left-2 text-[9px] text-gray-500 font-bold uppercase font-mono tracking-wider">Side</div>
+                    <ResponsiveContainer width="100%" height="80%"><PieChart><Pie data={sideData} innerRadius={35} outerRadius={50} paddingAngle={5} dataKey="value"><Cell fill="#00e676" stroke="#050505" /><Cell fill="#ff1744" stroke="#050505" /></Pie><Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', fontSize: '10px', borderRadius: '4px' }} itemStyle={{color:'#fff'}} /></PieChart></ResponsiveContainer>
                  </div>
              </div>
         </div>
     );
 };
 
+// FIX: WinRateGauge Responsif & Layout Safe
 const WinRateGauge = ({ percentage }) => {
-  const width = 320; const height = 180; const cx = width / 2; const cy = height - 25; const radius = 120; const strokeWidth = 28; const arcLength = Math.PI * radius; const strokeDashoffset = arcLength * (1 - percentage / 100);
-  let levelLabel = "Loading"; let levelColor = "text-gray-500"; let borderColor = "border-gray-500/30"; let glowColor = "rgba(107, 114, 128, 0.3)";
-  if (percentage < 40) { levelLabel = "Poor"; levelColor = "text-red-500"; borderColor = "border-red-500/30"; glowColor = "rgba(239, 68, 68, 0.3)"; } else if (percentage < 55) { levelLabel = "Average"; levelColor = "text-yellow-500"; borderColor = "border-yellow-500/30"; glowColor = "rgba(234, 179, 8, 0.3)"; } else if (percentage < 70) { levelLabel = "Good"; levelColor = "text-blue-400"; borderColor = "border-blue-400/30"; glowColor = "rgba(96, 165, 250, 0.3)"; } else { levelLabel = "Excellent!"; levelColor = "text-purple-400"; borderColor = "border-purple-400/30"; glowColor = "rgba(192, 132, 252, 0.4)"; }
-  const totalDots = 9; const dots = Array.from({ length: totalDots }).map((_, i) => { const angleDeg = 180 - (i * (180 / (totalDots - 1))); const angleRad = (angleDeg * Math.PI) / 180; const x = cx + radius * Math.cos(angleRad); const y = cy - radius * Math.sin(angleRad); const dotPercentage = (i / (totalDots - 1)) * 100; const isActive = percentage >= dotPercentage; return { x, y, isActive }; });
+  // Logic warna dan label
+  let levelLabel = "CALCULATING"; let levelColor = "text-gray-500"; let borderColor = "border-gray-500/30"; let glowColor = "rgba(107, 114, 128, 0.3)";
+  if (percentage < 40) { levelLabel = "CRITICAL"; levelColor = "text-[#ff1744]"; borderColor = "border-[#ff1744]/30"; glowColor = "rgba(255, 23, 68, 0.3)"; } 
+  else if (percentage < 55) { levelLabel = "MODERATE"; levelColor = "text-yellow-500"; borderColor = "border-yellow-500/30"; glowColor = "rgba(234, 179, 8, 0.3)"; } 
+  else if (percentage < 70) { levelLabel = "OPTIMAL"; levelColor = "text-blue-400"; borderColor = "border-blue-400/30"; glowColor = "rgba(96, 165, 250, 0.3)"; } 
+  else { levelLabel = "ELITE"; levelColor = "text-purple-400"; borderColor = "border-purple-400/30"; glowColor = "rgba(192, 132, 252, 0.4)"; }
+  
+  // Kalkulasi Arc
+  const radius = 120; 
+  const strokeWidth = 28; 
+  const arcLength = Math.PI * radius; 
+  const strokeDashoffset = arcLength * (1 - percentage / 100);
+  const cx = 160; // Center X (fixed coordinate space)
+  const cy = 160; // Center Y
+
+  const totalDots = 9; 
+  const dots = Array.from({ length: totalDots }).map((_, i) => { 
+      const angleDeg = 180 - (i * (180 / (totalDots - 1))); 
+      const angleRad = (angleDeg * Math.PI) / 180; 
+      const x = cx + radius * Math.cos(angleRad); 
+      const y = cy - radius * Math.sin(angleRad); 
+      const dotPercentage = (i / (totalDots - 1)) * 100; 
+      const isActive = percentage >= dotPercentage; 
+      return { x, y, isActive }; 
+  });
+  
   return (
-    <div className="relative flex flex-col items-center justify-center h-full w-full py-4">
-      <div className="relative mt-2" style={{ width: width, height: height }}>
-        <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} className="overflow-visible"><defs><linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="#22c55e" /><stop offset="100%" stopColor="#15803d" /></linearGradient><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="rgba(0,0,0,0.5)" /></filter></defs><path d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`} stroke="#1f2937" strokeWidth={strokeWidth} fill="transparent" strokeLinecap="round" /><path d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`} stroke="url(#gaugeGradient)" strokeWidth={strokeWidth} fill="transparent" strokeLinecap="round" strokeDasharray={arcLength} strokeDashoffset={strokeDashoffset} className="transition-all duration-1000 ease-out" filter="url(#shadow)" />{dots.map((dot, idx) => ( <circle key={idx} cx={dot.x} cy={dot.y} r={3.5} fill={dot.isActive ? "#ffffff" : "#374151"} className="transition-colors duration-1000" /> ))}</svg>
-        <div className="absolute left-0 w-full flex flex-col items-center justify-center" style={{ top: cy - 40 }}>
-             <div className={`mb-3 bg-[#0F0F0F] backdrop-blur-md ${levelColor} text-[11px] px-4 py-1 rounded-full border ${borderColor} uppercase tracking-widest font-bold`} style={{ boxShadow: `0 0 15px ${glowColor}` }}>{levelLabel}</div>
-             <div className="flex items-center justify-center gap-4 bg-[#121212] px-6 py-2 rounded-full border border-gray-800 shadow-2xl z-10"><span className="text-3xl font-bold text-white leading-none tabular-nums -mb-[2px] font-mono">{percentage}%</span><div className="w-[1px] h-5 bg-gray-600/50"></div><span className="text-[10px] text-gray-500 font-bold tracking-[0.2em] uppercase leading-none mt-[2px]">WIN RATE</span></div>
+    <div className="w-full h-full flex items-center justify-center p-2">
+      {/* Container SVG Responsif */}
+      <div className="relative w-full h-full max-w-[320px] max-h-[180px] flex items-center justify-center">
+        <svg viewBox="0 0 320 190" className="w-full h-full overflow-visible">
+            <defs>
+                <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#00e676" /><stop offset="100%" stopColor="#15803d" />
+                </linearGradient>
+                <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="rgba(0,0,0,0.5)" /></filter>
+            </defs>
+            <path d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`} stroke="#1f2937" strokeWidth={strokeWidth} fill="transparent" strokeLinecap="round" />
+            <path d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`} stroke="url(#gaugeGradient)" strokeWidth={strokeWidth} fill="transparent" strokeLinecap="round" strokeDasharray={arcLength} strokeDashoffset={strokeDashoffset} className="transition-all duration-1000 ease-out" filter="url(#shadow)" />
+            {dots.map((dot, idx) => ( <circle key={idx} cx={dot.x} cy={dot.y} r={3.5} fill={dot.isActive ? "#ffffff" : "#374151"} className="transition-colors duration-1000" /> ))}
+        </svg>
+        
+        {/* Label di tengah bawah SVG */}
+        <div className="absolute bottom-2 left-0 w-full flex flex-col items-center justify-center">
+             <div className={`mb-1 bg-black/50 backdrop-blur-md ${levelColor} text-[9px] px-3 py-0.5 rounded-full border ${borderColor} uppercase tracking-widest font-bold`} style={{ boxShadow: `0 0 15px ${glowColor}` }}>{levelLabel}</div>
+             <div className="flex items-center justify-center gap-2 bg-[#121212] px-4 py-1.5 rounded-full border border-gray-800 shadow-2xl z-10">
+                 <span className="text-2xl font-bold text-white leading-none tabular-nums font-mono">{percentage}%</span>
+                 <div className="w-[1px] h-4 bg-gray-600/50"></div>
+                 <span className="text-[8px] text-gray-500 font-bold tracking-[0.2em] uppercase mt-[1px]">WR</span>
+             </div>
         </div>
       </div>
     </div>
@@ -195,7 +293,6 @@ const WinRateGauge = ({ percentage }) => {
 export default function TradingDashboard() {
   const [trades, setTrades] = useState([]);
   
-  // MODIFIKASI: Default state string kosong
   const [selectedAccount, setSelectedAccount] = useState('');
   const [availableAccounts, setAvailableAccounts] = useState([]);
   
@@ -227,7 +324,6 @@ export default function TradingDashboard() {
   const fetchTrades = async () => {
     const startTime = Date.now();
     try {
-      // Ambil data (jika belum ada akun terpilih, request tanpa filter untuk dapat list akun)
       const url = (!selectedAccount) 
         ? API_URL 
         : `${API_URL}?accountId=${selectedAccount}`;
@@ -246,12 +342,12 @@ export default function TradingDashboard() {
               const existingHasAccount = existing.accountId && existing.accountId !== 'undefined';
               const newHasAccount = trade.accountId && trade.accountId !== 'undefined';
               if (!existingHasAccount && newHasAccount) { tradeMap.set(id, trade); return; }
+              // eslint-disable-next-line
               if (existing.status === 'Open' && trade.status !== 'Open') { tradeMap.set(id, trade); }
           }
       });
       let cleanData = Array.from(tradeMap.values());
       
-      // LOGIKA AKUN OTOMATIS
       if(cleanData.length > 0) {
           const incomingAccounts = cleanData
             .map(d => d.accountId)
@@ -260,13 +356,11 @@ export default function TradingDashboard() {
           const uniqueAccounts = Array.from(new Set(incomingAccounts)).sort();
           setAvailableAccounts(uniqueAccounts);
 
-          // JIKA BELUM ADA AKUN DIPILIH, PILIH YANG PERTAMA
           if (!selectedAccount && uniqueAccounts.length > 0) {
              setSelectedAccount(uniqueAccounts[0]);
           }
       }
 
-      // Filter Data di Frontend agar aman
       if (selectedAccount) {
           cleanData = cleanData.filter(t => String(t.accountId) === String(selectedAccount));
       }
@@ -297,17 +391,16 @@ export default function TradingDashboard() {
   // --- AUTO-DETECT MATA UANG ---
   const activeCurrency = useMemo(() => {
     if (trades.length === 0) return 'USD';
-    
-    // Ambil mata uang dari trade pertama di list (karena sudah difilter per akun)
     const tradeWithCurrency = trades.find(t => t.currency);
     return tradeWithCurrency ? tradeWithCurrency.currency : 'USD';
   }, [trades]);
 
-  // --- LOGIC CALCULATE STATS (YANG TADI HILANG) ---
+  // --- LOGIC CALCULATE STATS ---
   useEffect(() => {
     if (trades.length === 0) {
         setStats({ netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0, profitFactor: 0, totalTrades: 0, bestProfit: 0, biggestLoss: 0, expectancy: 0, avgTradeSize: 0, avgDuration: "0h:00m:00s" });
-        setExtraMetrics({ equity: 0, balance: 0, dailyDD: 0, maxDD: 0, tradingDays: 0, floatingPnL: 0 });
+        // Reset balance ke INITIAL_BALANCE, bukan 0
+        setExtraMetrics({ equity: INITIAL_BALANCE, balance: INITIAL_BALANCE, dailyDD: 0, maxDD: 0, tradingDays: 0, floatingPnL: 0 });
         setCharts({ weekday: [], hourly: [], symbolPerf: [] });
         return;
     }
@@ -315,8 +408,11 @@ export default function TradingDashboard() {
     let net = 0, grossP = 0, grossL = 0, wins = 0; let best = 0, worst = 0;
     let totalQty = 0; let totalDurationMs = 0; let closedTradesCount = 0;
     
-    let floating = 0, balance = 0;
-    let currentEqCurve = 0, maxEq = 0, maxDD = 0;
+    let floating = 0;
+    // FIX: Balance dimulai dari Saldo Awal
+    let balance = INITIAL_BALANCE;
+    
+    let currentEqCurve = INITIAL_BALANCE; let maxEq = INITIAL_BALANCE; let maxDD = 0;
     const uniqueDays = new Set();
     const weekdayPnl = [0,0,0,0,0,0,0]; 
     const hourlyPnl = Array(24).fill(0);
@@ -326,11 +422,13 @@ export default function TradingDashboard() {
 
     sortedForDD.forEach(t => {
       const pnl = parseFloat(t.pnl); const qty = parseFloat(t.qty || 0);
-      
-      if (t.status === 'Open') {
+      const statusLower = t.status ? t.status.toLowerCase() : '';
+
+      // FIX: Case insensitive check untuk 'open'
+      if (statusLower === 'open') {
           floating += pnl;
       } else {
-          balance += pnl;
+          balance += pnl; // Tambah realized PnL ke Balance
           net += pnl;
           totalQty += qty;
           closedTradesCount++;
@@ -357,7 +455,7 @@ export default function TradingDashboard() {
       symbolStats[t.symbol].vol += qty;
       symbolStats[t.symbol].trades += 1;
       symbolStats[t.symbol].pnl += pnl;
-      if(t.status !== 'Open') {
+      if(statusLower !== 'open') {
          if(pnl >= 0) symbolStats[t.symbol].wins++; else symbolStats[t.symbol].losses++;
       }
     });
@@ -372,14 +470,18 @@ export default function TradingDashboard() {
       avgTradeSize: closedTradesCount > 0 ? (totalQty / closedTradesCount).toFixed(2) : 0, avgDuration: closedTradesCount > 0 ? formatDuration(totalDurationMs / closedTradesCount) : "0h:00m:00s"
     });
 
+    // FIX: Equity = Balance (Initial + Realized) + Floating
+    const finalEquity = balance + floating;
     const dailyDD = floating < 0 ? Math.abs(floating) : 0;
+    
     setExtraMetrics({
-        equity: balance + floating, balance, dailyDD, maxDD, tradingDays: uniqueDays.size, floatingPnL: floating
+        equity: finalEquity, balance, dailyDD, maxDD, tradingDays: uniqueDays.size, floatingPnL: floating
     });
 
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     setCharts({
-        weekday: weekdayPnl.map((v, i) => ({ day: days[i], val: v })).filter(d => d.day !== 'Sun' && d.day !== 'Sat'),
+        // FIX: Hapus filter hari Sabtu/Minggu agar tampil semua
+        weekday: weekdayPnl.map((v, i) => ({ day: days[i], val: v })),
         hourly: hourlyPnl.map((v, i) => ({ hour: i.toString().padStart(2,'0'), val: v })),
         symbolPerf: Object.entries(symbolStats).map(([key, val]) => ({ symbol: key, ...val })).sort((a,b) => b.pnl - a.pnl)
     });
@@ -388,7 +490,12 @@ export default function TradingDashboard() {
 
   const sortedAndFilteredTrades = useMemo(() => {
     let data = [...trades];
-    if (filter !== 'Both') data = data.filter(t => filter === 'Open' ? t.status === 'Open' : t.status !== 'Open');
+    if (filter !== 'Both') {
+        data = data.filter(t => {
+            const s = t.status ? t.status.toLowerCase() : '';
+            return filter === 'Open' ? s === 'open' : s !== 'open';
+        });
+    }
     if (searchTerm) {
       const lower = searchTerm.toLowerCase();
       data = data.filter(t => t.symbol.toLowerCase().includes(lower) || String(t.id).includes(lower) || t.side.toLowerCase().includes(lower));
@@ -411,24 +518,18 @@ export default function TradingDashboard() {
   const totalPages = Math.ceil(sortedAndFilteredTrades.length / itemsPerPage);
   const requestSort = (key) => { let direction = 'asc'; if (sortConfig.key === key && sortConfig.direction === 'asc') { direction = 'desc'; } setSortConfig({ key, direction }); };
 
-  // --- LOGIC: DELETE ACCOUNT ---
   const handleDeleteAccount = async () => {
     if (!selectedAccount) return;
-
     const isConfirmed = window.confirm(`⚠️ PERINGATAN KERAS ⚠️\n\nAnda akan menghapus SELURUH data untuk Akun: ${selectedAccount}.\n\nTindakan ini tidak bisa dibatalkan. Apakah Anda yakin?`);
-    
     if (isConfirmed) {
         const userSecret = prompt("Masukkan KUNCI RAHASIA Admin untuk konfirmasi penghapusan:");
-        
         if (!userSecret) return;
-
         try {
             const res = await fetch(`${API_BASE}/api/delete-account?secret=${userSecret}&targetAccount=${selectedAccount}`);
             const result = await res.json();
-            
             if (res.ok) {
                 alert(`✅ BERHASIL: ${result.message || 'Akun telah dihapus.'}`);
-                setSelectedAccount(''); // Reset account
+                setSelectedAccount(''); 
                 window.location.reload(); 
             } else {
                 alert(`❌ GAGAL: ${result.error}`);
@@ -440,191 +541,184 @@ export default function TradingDashboard() {
   };
 
   const isHighRisk = extraMetrics.balance > 0 && (extraMetrics.floatingPnL / extraMetrics.balance) < -0.05;
-
-  // Render Helper untuk format mata uang
   const fmtCurr = (val) => formatCurrency(val, activeCurrency);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-gray-200 p-6 md:p-8 font-sans selection:bg-green-500/30">
+    <div className="min-h-screen p-4 md:p-8 font-sans text-gray-200 relative overflow-x-hidden selection:bg-[#00e676]/30">
       
-      {/* HEADER */}
-      <div className="max-w-[1600px] mx-auto mb-8 flex flex-col md:flex-row justify-between items-end gap-4">
-        <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                <Activity className="text-green-500" size={32} /> QUANT DASHBOARD 
-                <span className="text-[10px] bg-green-500/10 text-green-500 border border-green-500/20 px-2 py-0.5 rounded uppercase tracking-wider animate-pulse">Live System</span>
-              
-            </h1>
-            <p className="text-gray-500 text-xs mt-1 tracking-wide font-mono flex items-center gap-1">
-                Connected via Node.js Bridge • Latency: 
-                <span className={`font-bold ${latency > 500 ? 'text-red-500' : latency > 200 ? 'text-yellow-500' : 'text-green-500'}`}> {latency}ms</span>
-            </p>
-        </div>
-        
-        <div className="flex gap-2 items-center">
-            {/* Account Selector + DELETE BUTTON */}
-            <div className="flex items-center gap-2">
-                <div className="relative group bg-[#111] rounded-lg border border-[#222] flex items-center px-3 py-2 gap-2">
-                    <Users size={14} className="text-gray-500"/>
-                    <select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)} className="bg-transparent text-xs font-bold text-gray-300 focus:outline-none appearance-none cursor-pointer min-w-[120px]">
-                        {/* HAPUS OPSI ALL ACCOUNTS */}
-                        {availableAccounts.length === 0 && <option value="">Loading...</option>}
-                        {availableAccounts.map(acc => ( <option key={acc} value={acc}>Account {acc} {trades.length > 0 && trades[0].accountId === acc ? ' (Active)' : ''}</option> ))}
+      {/* ATMOSPHERIC BACKGROUND */}
+      <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-[-1]">
+          <div className="absolute top-[-10%] left-[20%] w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px]"></div>
+          <div className="absolute bottom-[-10%] right-[10%] w-[400px] h-[400px] bg-[#00e676]/5 rounded-full blur-[100px]"></div>
+      </div>
+
+      {/* HEADER SECTION */}
+      <div className="max-w-[1800px] mx-auto mb-10">
+        <div className="flex flex-col md:flex-row justify-between items-end gap-6 pb-6 border-b border-white/5">
+            <div>
+                <div className="flex items-center gap-3 mb-2">
+                    <div className="bg-[#00e676]/10 p-2 rounded-lg border border-[#00e676]/20 shadow-[0_0_15px_rgba(0,230,118,0.2)]">
+                        <Zap size={20} className="text-[#00e676] fill-[#00e676]" />
+                    </div>
+                    <h1 className="text-4xl font-extrabold tracking-tight text-white">HELIX<span className="text-gray-600">CORE</span></h1>
+                </div>
+                <div className="flex items-center gap-4 text-xs font-mono text-gray-500 uppercase tracking-wider">
+                    <span className="flex items-center gap-2">
+                        <span className={`relative flex h-2 w-2`}>
+                          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isSystemOnline ? 'bg-[#00e676]' : 'bg-red-500'}`}></span>
+                          <span className={`relative inline-flex rounded-full h-2 w-2 ${isSystemOnline ? 'bg-[#00e676]' : 'bg-red-500'}`}></span>
+                        </span>
+                        {isSystemOnline ? 'System Operational' : 'Offline'}
+                    </span>
+                    <span className="text-gray-700">|</span>
+                    <span>Latency: <span className={`${latency < 200 ? 'text-[#00e676]' : 'text-yellow-500'}`}>{latency}ms</span></span>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+                 <div className="relative group bg-[#090c10]/60 backdrop-blur border border-white/10 rounded-lg flex items-center px-4 py-2.5 transition-all hover:border-white/20 hover:bg-[#090c10]/80">
+                    <Users size={16} className="text-gray-500 mr-3"/>
+                    <select value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)} className="bg-transparent text-sm font-bold text-gray-200 focus:outline-none appearance-none cursor-pointer min-w-[140px] tracking-wide font-mono uppercase">
+                        {availableAccounts.length === 0 && <option value="">INITIALIZING...</option>}
+                        {availableAccounts.map(acc => ( <option key={acc} value={acc}>ACCOUNT {acc}</option> ))}
                     </select>
-                    <div className="pointer-events-none text-gray-500 text-[10px]">▼</div>
                 </div>
 
-                {/* TOMBOL DELETE (Hanya Muncul jika Akun Ada) */}
                 {selectedAccount && (
                     <button 
                         onClick={handleDeleteAccount}
-                        className="p-2.5 rounded-lg bg-red-900/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all shadow-sm"
-                        title="Hapus Data Akun Ini"
+                        className="p-3 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20 transition-all"
+                        title="Delete Account Data"
                     >
-                        <Trash2 size={14} />
+                        <Trash2 size={16}/>
                     </button>
                 )}
-            </div>
-            
-            <button onClick={() => downloadCSV(trades)} className="bg-[#111] hover:bg-[#222] px-4 py-2 rounded-lg border border-[#222] flex items-center gap-2 transition-all text-xs font-bold text-gray-400 hover:text-white"><Download size={14} /> EXPORT</button>
-            
-            {/* INDICATOR PULSE */}
-            <div className={`bg-[#111] px-4 py-1.5 rounded-lg border flex flex-col items-end min-w-[120px] transition-all duration-500 ${isSystemOnline ? 'border-[#222]' : 'border-red-900/50 bg-red-900/10'}`}>
-                <div className="flex items-center gap-2">
-                    <div className="relative flex h-2 w-2">
-                         {isSystemOnline && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>}
-                         <span className={`relative inline-flex rounded-full h-2 w-2 ${isSystemOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                    </div>
-                    <span className={`text-[10px] uppercase font-bold tracking-wider ${isSystemOnline ? 'text-gray-300' : 'text-red-400'}`}>
-                        {isSystemOnline ? 'Online' : 'Offline'}
-                    </span>
-                </div>
-                <span className="text-[8px] text-gray-600 font-mono mt-0.5">
-                    {lastUpdated.toLocaleTimeString()}
-                </span>
+                
+                <button onClick={() => downloadCSV(trades)} className="flex items-center gap-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 px-5 py-2.5 rounded-lg text-xs font-bold tracking-wider transition-all">
+                    <Download size={16}/> CSV
+                </button>
             </div>
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto space-y-6">
+      <div className="max-w-[1800px] mx-auto space-y-8">
         
-        {/* --- SECTION: FINANCIAL OVERVIEW --- */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* FINANCIAL OVERVIEW GRID */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <OverviewCard 
-            title="Current Equity" 
+            title="Equity" 
             value={fmtCurr(extraMetrics.equity)} 
             isNegative={false} 
             icon={DollarSign} 
-            subValue={`${extraMetrics.floatingPnL >= 0 ? '+' : ''}${fmtCurr(extraMetrics.floatingPnL)} Floating`} 
+            subValue={`${extraMetrics.floatingPnL >= 0 ? '+' : ''}${fmtCurr(extraMetrics.floatingPnL)} FLT`} 
             isAlert={isHighRisk} 
           />
-          <OverviewCard title="Current Balance" value={fmtCurr(extraMetrics.balance)} icon={Layers} />
-          <OverviewCard title="Net Return" value={fmtCurr(stats.netProfit)} isNegative={stats.netProfit < 0} icon={TrendingUp} />
-          <OverviewCard title="Daily Drawdown" value={`-${fmtCurr(extraMetrics.dailyDD)}`} isNegative={true} icon={TrendingDown} />
-          <OverviewCard title="Max Drawdown" value={`-${fmtCurr(extraMetrics.maxDD)}`} isNegative={true} icon={Activity} />
-          <OverviewCard title="Trading Days" value={extraMetrics.tradingDays} icon={Calendar} />
+          <OverviewCard title="Balance" value={fmtCurr(extraMetrics.balance)} icon={Layers} />
+          <OverviewCard title="Net PnL" value={fmtCurr(stats.netProfit)} isNegative={stats.netProfit < 0} icon={TrendingUp} />
+          <OverviewCard title="Daily DD" value={`-${fmtCurr(extraMetrics.dailyDD)}`} isNegative={true} icon={TrendingDown} />
+          <OverviewCard title="Max DD" value={`-${fmtCurr(extraMetrics.maxDD)}`} isNegative={true} icon={Activity} />
+          <OverviewCard title="Active Days" value={extraMetrics.tradingDays} icon={Calendar} />
         </div>
 
-        {/* --- SECTION: STATS CARDS & GAUGE --- */}
+        {/* CHARTS & STATS SECTION */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+            <div className="xl:col-span-8 bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl p-6 h-[420px] shadow-lg">
+                <AdvancedChart data={trades} currency={activeCurrency} />
+            </div>
+            
+            {/* FIX: Layout Grid Kanan agar tidak terpotong (min-h dan grid gap) */}
+            <div className="xl:col-span-4 flex flex-col gap-4 h-full min-h-[420px]">
+                <div className="flex-1 min-h-[180px] bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl overflow-hidden relative">
+                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+                     <WinRateGauge percentage={stats.winRate} />
+                </div>
+                <div className="grid grid-cols-2 gap-3 flex-1">
+                  <StatCard label="Profit Factor" value={stats.profitFactor} icon={BarChart2} />
+                  <StatCard label="Total Trades" value={stats.totalTrades} icon={Layers} />
+                  <StatCard label="Expectancy" value={fmtCurr(stats.expectancy)} icon={TrendingUp} className="col-span-2" subValue="Avg return per trade" />
+                </div>
+            </div>
+        </div>
+
+        {/* ADVANCED BREAKDOWN */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-8 grid grid-cols-2 md:grid-cols-3 gap-4">
-            <StatCard label="Net Profit" value={fmtCurr(stats.netProfit)} icon={TrendingUp} prefix="" />
-            <StatCard label="Gross Profit" value={fmtCurr(stats.grossProfit)} prefix="" />
-            <StatCard label="Gross Loss" value={fmtCurr(stats.grossLoss)} prefix="" />
-            <StatCard label="Profit Factor" value={stats.profitFactor} prefix="" />
-            <StatCard label="Best Profit" value={fmtCurr(stats.bestProfit)} prefix="" />
-            <StatCard label="Biggest Loss" value={fmtCurr(stats.biggestLoss)} prefix="" />
-            <StatCard label="Expectancy" value={fmtCurr(stats.expectancy)} prefix="" />
-            <StatCard label="Avg. Trade Size" value={stats.avgTradeSize} prefix="" icon={BarChart2} subValue="Lots / Trade" />
-            <StatCard label="Avg. Duration" value={stats.avgDuration} prefix="" icon={Clock} subValue="Time in Market" />
-          </div>
-          <div className="lg:col-span-4 bg-[#0A0A0A] border border-[#1C1C1C] rounded-2xl flex flex-col items-center justify-center relative overflow-hidden">
-              <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px] [mask-image:radial-gradient(ellipse_at_center,black,transparent)]"></div>
-              <div className="absolute top-4 left-4 text-gray-500 text-[10px] font-bold tracking-wider uppercase z-10">Performance Efficiency</div>
-              <WinRateGauge percentage={stats.winRate} />
-          </div>
-        </div>
-
-        {/* --- SECTION: MAIN CHARTS --- */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-8 bg-[#0A0A0A] border border-[#1C1C1C] rounded-2xl p-6 h-[300px]">
-              <AdvancedChart data={trades} currency={activeCurrency} />
-          </div>
-          <div className="lg:col-span-4 bg-[#0A0A0A] border border-[#1C1C1C] rounded-2xl p-6 h-[300px]">
-              <AnalyticsCharts trades={trades} />
-          </div>
-        </div>
-
-        {/* --- SECTION: ADVANCED ANALYSIS CHARTS --- */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-xl p-5 h-[280px]">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">P & L by Weekday</h3>
+             <div className="lg:col-span-4 bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl p-6 h-[300px]">
+                 <AnalyticsCharts trades={trades} />
+             </div>
+             <div className="lg:col-span-4 bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl p-5 h-[300px]">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 font-mono">Performance by Weekday</h3>
                 <SimpleBarChart data={charts.weekday} xKey="day" yKey="val" color="#3b82f6" currency={activeCurrency} />
              </div>
-             <div className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-xl p-5 h-[280px]">
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">P & L by Hours</h3>
-                <SimpleBarChart data={charts.hourly} xKey="hour" yKey="val" color="#8b5cf6" currency={activeCurrency} />
+             <div className="lg:col-span-4 bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl p-5 h-[300px]">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 font-mono">Performance by Hour</h3>
+                <SimpleBarChart data={charts.hourly} xKey="hour" yKey="val" color="#a855f7" currency={activeCurrency} />
              </div>
         </div>
 
-        {/* --- SECTION: SYMBOL PERFORMANCE TABLE --- */}
-        <div className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-[#1C1C1C]"><h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2"><BarChart2 size={14}/> Symbol Performance</h3></div>
-          <div className="overflow-x-auto max-h-[300px]">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-[#111] sticky top-0 z-10">
-                <tr className="text-gray-500 text-[10px] uppercase tracking-wider">
-                  <th className="p-3">Symbol</th><th className="p-3 text-right">Volume</th><th className="p-3 text-right">Avg Trade Size</th><th className="p-3 text-center">Trades</th><th className="p-3 text-center text-green-500">Winning</th><th className="p-3 text-center text-red-500">Losing</th><th className="p-3 text-right">Net P&L</th>
-                </tr>
-              </thead>
-              <tbody className="text-xs font-mono divide-y divide-[#1C1C1C]">
-                {charts.symbolPerf.map((sym, idx) => (
-                  <tr key={idx} className="hover:bg-[#111] transition-colors">
-                    <td className="p-3 font-bold text-white">{sym.symbol}</td>
-                    <td className="p-3 text-right text-gray-400">{formatNumber(sym.vol)}</td>
-                    <td className="p-3 text-right text-gray-400">{formatNumber(sym.vol / (sym.trades || 1))}</td>
-                    <td className="p-3 text-center text-white">{sym.trades}</td>
-                    <td className="p-3 text-center text-green-400">{sym.wins}</td>
-                    <td className="p-3 text-center text-red-400">{sym.losses}</td>
-                    <td className={`p-3 text-right font-bold ${sym.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtCurr(sym.pnl)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* TRADE JOURNAL TERMINAL */}
+        <div className="bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
+             <div className="p-6 border-b border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-4">
+                    <div className="bg-blue-500/10 p-2 rounded text-blue-400"><Activity size={18}/></div>
+                    <div>
+                        <h2 className="text-lg font-bold text-white tracking-tight">Trade Journal</h2>
+                        <div className="text-[10px] text-gray-500 font-mono mt-0.5">LATEST EXECUTION LOGS</div>
+                    </div>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-3">
+                     <div className="relative group">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 group-hover:text-blue-400 transition-colors" size={14} />
+                        <input type="text" placeholder="SEARCH TICKET / SYMBOL" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-black/20 border border-white/10 text-xs text-white pl-9 pr-4 py-2.5 rounded-lg focus:outline-none focus:border-blue-500/50 w-64 font-mono transition-all placeholder:text-gray-700" />
+                     </div>
+                     <div className="flex bg-black/20 rounded-lg p-1 border border-white/5">
+                        {['Open', 'Closed', 'Both'].map((item) => (
+                            <button key={item} onClick={() => setFilter(item)} className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${filter === item ? 'bg-white/10 text-white shadow-sm' : 'text-gray-600 hover:text-gray-400'}`}>{item}</button>
+                        ))}
+                     </div>
+                </div>
+             </div>
+             
+             <div className="overflow-x-auto min-h-[400px]">
+                <table className="w-full text-left border-collapse">
+                   <thead className="bg-black/20 text-gray-500 text-[10px] uppercase tracking-widest font-mono">
+                      <tr>
+                        {[{ key: 'id', label: 'Ticket' }, { key: 'accountId', label: 'Account' }, { key: 'openDate', label: 'Date' }, { key: 'symbol', label: 'Symbol' }, { key: 'side', label: 'Side' }, { key: 'entry', label: 'Entry' }, { key: 'exit', label: 'Exit' }, { key: 'qty', label: 'Size' }, { key: 'pnl', label: 'Net PnL' }, { key: 'status', label: 'State' }].map((col) => (
+                            <th key={col.key} onClick={() => requestSort(col.key)} className="py-4 px-4 font-bold border-b border-white/5 hover:text-white cursor-pointer transition-colors select-none group">
+                                <div className="flex items-center gap-1">{col.label} {sortConfig.key === col.key && (<span className="text-blue-500">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>)}</div>
+                            </th>
+                        ))}
+                      </tr>
+                   </thead>
+                   <tbody className="text-xs font-mono divide-y divide-white/5">
+                       {currentItems.length > 0 ? currentItems.map((trade, idx) => (
+                         <tr key={idx} className="hover:bg-white/[0.02] transition-colors group">
+                           <td className="py-4 px-4 text-gray-400 group-hover:text-white transition-colors border-l-2 border-transparent group-hover:border-blue-500">{trade.id}</td>
+                           <td className="py-4 px-4 text-blue-400/70">{trade.accountId || '-'}</td>
+                           <td className="py-4 px-4 text-gray-500">{trade.openDate}</td>
+                           <td className="py-4 px-4 font-bold text-gray-200">{trade.symbol}</td>
+                           <td className="py-4 px-4"><span className={`font-bold ${trade.side === 'Buy' ? 'text-[#00e676]' : 'text-[#ff1744]'}`}>{trade.side.toUpperCase()}</span></td>
+                           <td className="py-4 px-4 text-gray-400">{parseFloat(trade.entry).toFixed(5)}</td>
+                           <td className="py-4 px-4 text-gray-400">{parseFloat(trade.exit).toFixed(5)}</td>
+                           <td className="py-4 px-4 text-gray-300">{parseFloat(trade.qty).toFixed(2)}</td>
+                           <td className={`py-4 px-4 font-bold text-[13px] ${parseFloat(trade.pnl) >= 0 ? 'text-[#00e676] drop-shadow-[0_0_8px_rgba(0,230,118,0.3)]' : 'text-[#ff1744]'}`}>{fmtCurr(trade.pnl)}</td>
+                           <td className="py-4 px-4"><StatusBadge status={trade.status} /></td>
+                         </tr>
+                       )) : (
+                         <tr><td colSpan="10" className="py-12 text-center text-gray-600 text-xs font-mono uppercase tracking-widest flex flex-col items-center gap-2"><AlertTriangle size={24} className="mb-2 opacity-50"/>No matching records found</td></tr>
+                       )}
+                   </tbody>
+                </table>
+             </div>
 
-        {/* --- SECTION: TRADE HISTORY TABLE --- */}
-        <div className="bg-[#0A0A0A] border border-[#1C1C1C] rounded-2xl p-6 md:p-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-            <div className="flex items-center gap-4"><h2 className="text-lg font-bold text-white tracking-tight">Trade History</h2><span className="text-[10px] text-gray-500 bg-[#111] px-2 py-1 rounded border border-[#222]">Total: {sortedAndFilteredTrades.length} trades</span><span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 uppercase">VIEW: {selectedAccount}</span></div>
-            <div className="flex flex-wrap gap-3 w-full md:w-auto">
-               <div className="relative group"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 group-hover:text-gray-400 transition-colors" size={14} /><input type="text" placeholder="Search Symbol / Ticket..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-[#111] border border-[#222] text-xs text-white pl-9 pr-4 py-2 rounded-lg focus:outline-none focus:border-green-500/50 w-full md:w-48 transition-all" /></div>
-               <div className="flex bg-[#111] rounded-lg p-1 border border-[#222]">{['Open', 'Closed', 'Both'].map((item) => (<button key={item} onClick={() => setFilter(item)} className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all duration-300 ${filter === item ? 'bg-[#222] text-white border border-gray-600 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>{item}</button>))}</div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto min-h-[400px]">
-              <table className="w-full text-left border-collapse">
-                <thead><tr className="border-b border-[#1C1C1C]">{[{ key: 'id', label: 'Ticket' }, { key: 'accountId', label: 'Account' }, { key: 'openDate', label: 'Date' }, { key: 'symbol', label: 'Symbol' }, { key: 'side', label: 'Side' }, { key: 'entry', label: 'Entry' }, { key: 'exit', label: 'Exit' }, { key: 'qty', label: 'Qty' }, { key: 'pnl', label: 'P&L' }, { key: 'status', label: 'Status' }].map((col) => (<th key={col.key} onClick={() => requestSort(col.key)} className="py-4 px-3 text-[9px] uppercase tracking-widest font-bold text-gray-500 cursor-pointer hover:text-white transition-colors select-none group"><div className="flex items-center gap-1">{col.label} {sortConfig.key === col.key && (<span className="text-green-500">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>)}</div></th>))}</tr></thead>
-                <tbody className="text-sm">
-                  {currentItems.length > 0 ? currentItems.map((trade, idx) => (
-                    <tr key={idx} className="border-b border-[#1C1C1C]/40 hover:bg-white/[0.02] transition-colors group">
-                      <td className="py-4 px-3 text-gray-500 text-[10px] tabular-nums font-mono border-l-2 border-transparent group-hover:border-green-500 transition-all">{trade.id}</td><td className="py-4 px-3 text-blue-400 text-[10px] tabular-nums font-mono opacity-70">{trade.accountId || '-'}</td><td className="py-4 px-3 text-gray-500 text-[10px] tabular-nums font-mono">{trade.openDate}</td><td className="py-4 px-3 font-bold text-white text-[11px] tracking-wide">{trade.symbol}</td><td className="py-4 px-3"><span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-opacity-10 ${trade.side === 'Buy' ? 'text-green-500 bg-green-500' : 'text-red-500 bg-red-500'}`}>{trade.side}</span></td><td className="py-4 px-3 text-gray-300 text-[11px] font-mono tabular-nums">{parseFloat(trade.entry).toFixed(2)}</td><td className="py-4 px-3 text-gray-300 text-[11px] font-mono tabular-nums">{parseFloat(trade.exit).toFixed(2)}</td><td className="py-4 px-3 text-gray-300 text-[11px] font-mono tabular-nums">{parseFloat(trade.qty).toFixed(2)}</td><td className={`py-4 px-3 font-bold text-[11px] font-mono tabular-nums ${parseFloat(trade.pnl) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtCurr(trade.pnl)}</td><td className="py-4 px-3"><StatusBadge status={trade.status} /></td>
-                    </tr>
-                  )) : (<tr><td colSpan="10" className="py-10 text-center text-gray-600 text-xs uppercase tracking-widest">No data match found</td></tr>)}
-                </tbody>
-              </table>
-          </div>
-
-          <div className="flex justify-between items-center mt-6 pt-4 border-t border-[#1C1C1C]">
-              <span className="text-[10px] text-gray-500 font-mono">Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, sortedAndFilteredTrades.length)} of {sortedAndFilteredTrades.length} entries</span>
-              <div className="flex items-center gap-2">
-                  <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-2 rounded bg-[#111] border border-[#222] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"><ChevronLeft size={14} /></button>
-                  <div className="flex gap-1">{Array.from({length: Math.min(5, totalPages)}, (_, i) => (<button key={i} onClick={() => setCurrentPage(i + 1)} className={`w-8 h-8 rounded text-[10px] font-bold ${currentPage === i + 1 ? 'bg-green-500/10 text-green-500 border border-green-500/30' : 'text-gray-500 hover:bg-[#111]'}`}>{i + 1}</button>))}</div>
-                  <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="p-2 rounded bg-[#111] border border-[#222] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"><ChevronRight size={14} /></button>
-              </div>
-          </div>
+             <div className="flex justify-between items-center p-4 border-t border-white/5 bg-black/20">
+                  <span className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">Displaying {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, sortedAndFilteredTrades.length)} of {sortedAndFilteredTrades.length}</span>
+                  <div className="flex items-center gap-2">
+                      <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-2 rounded-lg bg-white/5 border border-white/5 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"><ChevronLeft size={14} /></button>
+                      <div className="flex gap-1">{Array.from({length: Math.min(5, totalPages)}, (_, i) => (<button key={i} onClick={() => setCurrentPage(i + 1)} className={`w-8 h-8 rounded-lg text-[10px] font-bold font-mono transition-all ${currentPage === i + 1 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}>{i + 1}</button>))}</div>
+                      <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="p-2 rounded-lg bg-white/5 border border-white/5 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"><ChevronRight size={14} /></button>
+                  </div>
+             </div>
         </div>
 
       </div>
