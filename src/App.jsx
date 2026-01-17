@@ -453,10 +453,7 @@ export default function TradingDashboard() {
             <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
                 <Activity className="text-green-500" size={32} /> QUANT DASHBOARD 
                 <span className="text-[10px] bg-green-500/10 text-green-500 border border-green-500/20 px-2 py-0.5 rounded uppercase tracking-wider animate-pulse">Live System</span>
-              {/* DEBUGGER: Hapus nanti jika sudah fix */}
-<span className="text-[10px] text-yellow-500 font-mono border border-yellow-500 px-2 rounded">
-  DETECTED: {activeCurrency}
-</span>
+              
             </h1>
             <p className="text-gray-500 text-xs mt-1 tracking-wide font-mono flex items-center gap-1">
                 Connected via Node.js Bridge • Latency: 
