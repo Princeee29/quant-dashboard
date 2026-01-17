@@ -13,9 +13,6 @@ import {
 const API_URL = 'https://quant-dashboard-eta.vercel.app/api/trades'; 
 const API_BASE = 'https://quant-dashboard-eta.vercel.app'; 
 
-// --- CONFIG: SALDO AWAL (Ubah ini sesuai kebutuhan atau buat dinamis) ---
-const INITIAL_BALANCE = 100000; 
-
 // --- HELPER FUNCTIONS ---
 const formatDuration = (ms) => {
   if (!ms || ms < 0) return "0h:00m:00s";
@@ -63,7 +60,6 @@ const playWinSound = () => {
 // --- KOMPONEN UI ---
 
 const StatusBadge = ({ status }) => {
-  // Fix logic deteksi status Open (Case Insensitive)
   const normalizedStatus = status ? status.toLowerCase() : '';
   const isWin = normalizedStatus === 'win';
   const isOpen = normalizedStatus === 'open';
@@ -147,14 +143,14 @@ const SimpleBarChart = ({ data, xKey, yKey, color, currency }) => (
   </ResponsiveContainer>
 );
 
-const AdvancedChart = ({ data, currency }) => {
+const AdvancedChart = ({ data, currency, initialBalance }) => {
   const [view, setView] = useState('equity'); 
   if (!data || data.length === 0) return <div className="h-full flex flex-col items-center justify-center gap-3 text-gray-700"><Activity className="animate-pulse" size={40}/><span className="text-xs font-mono uppercase tracking-widest">Waiting for Data Stream...</span></div>;
   
   const reversedData = [...data].reverse();
   
-  // FIX: Chart Equity Logic - Start from INITIAL_BALANCE
-  let currentBalance = INITIAL_BALANCE;
+  // LOGIC: Chart Equity dimulai dari Saldo Awal yang didapat dari API
+  let currentBalance = initialBalance;
   
   const equityData = reversedData.map((t, index) => { 
       currentBalance += parseFloat(t.pnl); 
@@ -230,22 +226,19 @@ const AnalyticsCharts = ({ trades }) => {
     );
 };
 
-// FIX: WinRateGauge Responsif & Layout Safe
 const WinRateGauge = ({ percentage }) => {
-  // Logic warna dan label
   let levelLabel = "CALCULATING"; let levelColor = "text-gray-500"; let borderColor = "border-gray-500/30"; let glowColor = "rgba(107, 114, 128, 0.3)";
   if (percentage < 40) { levelLabel = "CRITICAL"; levelColor = "text-[#ff1744]"; borderColor = "border-[#ff1744]/30"; glowColor = "rgba(255, 23, 68, 0.3)"; } 
   else if (percentage < 55) { levelLabel = "MODERATE"; levelColor = "text-yellow-500"; borderColor = "border-yellow-500/30"; glowColor = "rgba(234, 179, 8, 0.3)"; } 
   else if (percentage < 70) { levelLabel = "OPTIMAL"; levelColor = "text-blue-400"; borderColor = "border-blue-400/30"; glowColor = "rgba(96, 165, 250, 0.3)"; } 
   else { levelLabel = "ELITE"; levelColor = "text-purple-400"; borderColor = "border-purple-400/30"; glowColor = "rgba(192, 132, 252, 0.4)"; }
   
-  // Kalkulasi Arc
   const radius = 120; 
   const strokeWidth = 28; 
   const arcLength = Math.PI * radius; 
   const strokeDashoffset = arcLength * (1 - percentage / 100);
-  const cx = 160; // Center X (fixed coordinate space)
-  const cy = 160; // Center Y
+  const cx = 160; 
+  const cy = 160; 
 
   const totalDots = 9; 
   const dots = Array.from({ length: totalDots }).map((_, i) => { 
@@ -260,7 +253,6 @@ const WinRateGauge = ({ percentage }) => {
   
   return (
     <div className="w-full h-full flex items-center justify-center p-2">
-      {/* Container SVG Responsif */}
       <div className="relative w-full h-full max-w-[320px] max-h-[180px] flex items-center justify-center">
         <svg viewBox="0 0 320 190" className="w-full h-full overflow-visible">
             <defs>
@@ -273,8 +265,6 @@ const WinRateGauge = ({ percentage }) => {
             <path d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`} stroke="url(#gaugeGradient)" strokeWidth={strokeWidth} fill="transparent" strokeLinecap="round" strokeDasharray={arcLength} strokeDashoffset={strokeDashoffset} className="transition-all duration-1000 ease-out" filter="url(#shadow)" />
             {dots.map((dot, idx) => ( <circle key={idx} cx={dot.x} cy={dot.y} r={3.5} fill={dot.isActive ? "#ffffff" : "#374151"} className="transition-colors duration-1000" /> ))}
         </svg>
-        
-        {/* Label di tengah bawah SVG */}
         <div className="absolute bottom-2 left-0 w-full flex flex-col items-center justify-center">
              <div className={`mb-1 bg-black/50 backdrop-blur-md ${levelColor} text-[9px] px-3 py-0.5 rounded-full border ${borderColor} uppercase tracking-widest font-bold`} style={{ boxShadow: `0 0 15px ${glowColor}` }}>{levelLabel}</div>
              <div className="flex items-center justify-center gap-2 bg-[#121212] px-4 py-1.5 rounded-full border border-gray-800 shadow-2xl z-10">
@@ -306,6 +296,9 @@ export default function TradingDashboard() {
   const [isSystemOnline, setIsSystemOnline] = useState(true);
   const [latency, setLatency] = useState(0);
 
+  // BARU: State untuk menyimpan Info Akun Real (Saldo, Equity)
+  const [realAccountInfo, setRealAccountInfo] = useState(null);
+
   const [stats, setStats] = useState({
     netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0,
     profitFactor: 0, totalTrades: 0, bestProfit: 0, biggestLoss: 0,
@@ -320,7 +313,21 @@ export default function TradingDashboard() {
     weekday: [], hourly: [], symbolPerf: []
   });
 
-  // --- LOGIKA FETCH DATA ---
+  // --- FUNCTION: FETCH INFO AKUN (REAL BALANCE) ---
+  const fetchAccountInfo = async () => {
+    if (!selectedAccount) return;
+    try {
+        const res = await fetch(`${API_BASE}/api/account-info?accountId=${selectedAccount}`);
+        const data = await res.json();
+        // Jika data valid, simpan ke state
+        if (data && data.balance !== undefined) {
+            setRealAccountInfo(data);
+        }
+    } catch (e) {
+        console.error("Failed to fetch account info", e);
+    }
+  };
+
   const fetchTrades = async () => {
     const startTime = Date.now();
     try {
@@ -333,6 +340,9 @@ export default function TradingDashboard() {
       
       const endTime = Date.now();
       setLatency(endTime - startTime);
+
+      // PANGGIL INI JUGA
+      await fetchAccountInfo();
 
       const tradeMap = new Map();
       data.forEach(trade => {
@@ -388,19 +398,17 @@ export default function TradingDashboard() {
     return () => clearInterval(interval);
   }, [selectedAccount]); 
 
-  // --- AUTO-DETECT MATA UANG ---
   const activeCurrency = useMemo(() => {
+    if (realAccountInfo && realAccountInfo.currency) return realAccountInfo.currency;
     if (trades.length === 0) return 'USD';
     const tradeWithCurrency = trades.find(t => t.currency);
     return tradeWithCurrency ? tradeWithCurrency.currency : 'USD';
-  }, [trades]);
+  }, [trades, realAccountInfo]);
 
-  // --- LOGIC CALCULATE STATS ---
   useEffect(() => {
     if (trades.length === 0) {
         setStats({ netProfit: 0, grossProfit: 0, grossLoss: 0, winRate: 0, profitFactor: 0, totalTrades: 0, bestProfit: 0, biggestLoss: 0, expectancy: 0, avgTradeSize: 0, avgDuration: "0h:00m:00s" });
-        // Reset balance ke INITIAL_BALANCE, bukan 0
-        setExtraMetrics({ equity: INITIAL_BALANCE, balance: INITIAL_BALANCE, dailyDD: 0, maxDD: 0, tradingDays: 0, floatingPnL: 0 });
+        setExtraMetrics({ equity: 0, balance: 0, dailyDD: 0, maxDD: 0, tradingDays: 0, floatingPnL: 0 });
         setCharts({ weekday: [], hourly: [], symbolPerf: [] });
         return;
     }
@@ -409,10 +417,8 @@ export default function TradingDashboard() {
     let totalQty = 0; let totalDurationMs = 0; let closedTradesCount = 0;
     
     let floating = 0;
-    // FIX: Balance dimulai dari Saldo Awal
-    let balance = INITIAL_BALANCE;
     
-    let currentEqCurve = INITIAL_BALANCE; let maxEq = INITIAL_BALANCE; let maxDD = 0;
+    // --- HITUNG TRADING STATS ---
     const uniqueDays = new Set();
     const weekdayPnl = [0,0,0,0,0,0,0]; 
     const hourlyPnl = Array(24).fill(0);
@@ -424,11 +430,9 @@ export default function TradingDashboard() {
       const pnl = parseFloat(t.pnl); const qty = parseFloat(t.qty || 0);
       const statusLower = t.status ? t.status.toLowerCase() : '';
 
-      // FIX: Case insensitive check untuk 'open'
       if (statusLower === 'open') {
           floating += pnl;
       } else {
-          balance += pnl; // Tambah realized PnL ke Balance
           net += pnl;
           totalQty += qty;
           closedTradesCount++;
@@ -444,11 +448,6 @@ export default function TradingDashboard() {
               weekdayPnl[d.getDay()] += pnl;
               hourlyPnl[d.getHours()] += pnl;
           }
-
-          currentEqCurve += pnl;
-          if(currentEqCurve > maxEq) maxEq = currentEqCurve;
-          const dd = maxEq - currentEqCurve;
-          if(dd > maxDD) maxDD = dd;
       }
 
       if(!symbolStats[t.symbol]) symbolStats[t.symbol] = { vol:0, trades:0, wins:0, losses:0, pnl:0 };
@@ -470,23 +469,44 @@ export default function TradingDashboard() {
       avgTradeSize: closedTradesCount > 0 ? (totalQty / closedTradesCount).toFixed(2) : 0, avgDuration: closedTradesCount > 0 ? formatDuration(totalDurationMs / closedTradesCount) : "0h:00m:00s"
     });
 
-    // FIX: Equity = Balance (Initial + Realized) + Floating
-    const finalEquity = balance + floating;
-    const dailyDD = floating < 0 ? Math.abs(floating) : 0;
-    
+    // --- LOGIKA UTAMA DISPLAY SALDO ---
+    let displayBalance = 0;
+    let displayEquity = 0;
+    let initialBalanceForChart = 0;
+
+    if (realAccountInfo) {
+        // Jika ada data REAL dari MT5, gunakan itu
+        displayBalance = realAccountInfo.balance;
+        displayEquity = realAccountInfo.equity;
+        // Estimasi Saldo Awal untuk Chart Equity = Balance Akhir - Total Net Profit
+        initialBalanceForChart = displayBalance - net;
+    } else {
+        // Fallback jika belum ada koneksi
+        const FALLBACK = 100000;
+        displayBalance = FALLBACK + net;
+        displayEquity = displayBalance + floating;
+        initialBalanceForChart = FALLBACK;
+    }
+
     setExtraMetrics({
-        equity: finalEquity, balance, dailyDD, maxDD, tradingDays: uniqueDays.size, floatingPnL: floating
+        equity: displayEquity, 
+        balance: displayBalance, 
+        dailyDD: 0, 
+        maxDD: 0, 
+        tradingDays: uniqueDays.size, 
+        floatingPnL: floating 
     });
 
+    // Kirim initialBalanceForChart ke Chart agar grafik Equity dimulai dari angka yang benar
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     setCharts({
-        // FIX: Hapus filter hari Sabtu/Minggu agar tampil semua
         weekday: weekdayPnl.map((v, i) => ({ day: days[i], val: v })),
         hourly: hourlyPnl.map((v, i) => ({ hour: i.toString().padStart(2,'0'), val: v })),
-        symbolPerf: Object.entries(symbolStats).map(([key, val]) => ({ symbol: key, ...val })).sort((a,b) => b.pnl - a.pnl)
+        symbolPerf: Object.entries(symbolStats).map(([key, val]) => ({ symbol: key, ...val })).sort((a,b) => b.pnl - a.pnl),
+        initialBalance: initialBalanceForChart // Simpan ini untuk dipakai di AdvancedChart
     });
 
-  }, [trades]);
+  }, [trades, realAccountInfo]); // Tambahkan realAccountInfo ke dependency
 
   const sortedAndFilteredTrades = useMemo(() => {
     let data = [...trades];
@@ -623,10 +643,9 @@ export default function TradingDashboard() {
         {/* CHARTS & STATS SECTION */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
             <div className="xl:col-span-8 bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl p-6 h-[420px] shadow-lg">
-                <AdvancedChart data={trades} currency={activeCurrency} />
+                <AdvancedChart data={trades} currency={activeCurrency} initialBalance={charts.initialBalance || 100000} />
             </div>
             
-            {/* FIX: Layout Grid Kanan agar tidak terpotong (min-h dan grid gap) */}
             <div className="xl:col-span-4 flex flex-col gap-4 h-full min-h-[420px]">
                 <div className="flex-1 min-h-[180px] bg-[#090c10]/60 backdrop-blur-md border border-white/5 rounded-2xl overflow-hidden relative">
                     <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
